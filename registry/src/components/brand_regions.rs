@@ -2141,6 +2141,9 @@ impl BrandRegionsScreen {
         } else {
             (width - 428.0).max(260.0)
         };
+        let target_card_h = ((width - if compact_split { 36. } else { 64. }) * 0.54)
+            .clamp(368.0, 468.0)
+            .round();
         let (stage_w, stage_h) = sb_opt
             .map(|b| {
                 (
@@ -2148,9 +2151,9 @@ impl BrandRegionsScreen {
                     f32::from(b.size.height).max(120.),
                 )
             })
-            .unwrap_or((fallback_stage_w, 380.0));
-        let pad_top = 8.0f32;
-        let pad_bot = 28.0f32;
+            .unwrap_or((fallback_stage_w, (target_card_h - 56.0).max(240.0)));
+        let pad_top = 4.0f32;
+        let pad_bot = 20.0f32;
         let avail_w = (stage_w - 8.0).max(80.0);
         let avail_h = (stage_h - pad_top - pad_bot).max(80.0);
         let fit_scale = (avail_w / vw).min(avail_h / vh);
@@ -2317,7 +2320,7 @@ impl BrandRegionsScreen {
             ))
             .relative()
             .flex_1()
-            .min_h(px(if stack_layout { 280. } else { 340. }))
+            .min_h(px(if stack_layout { 240. } else { 280. }))
             .overflow_hidden()
             .when(self.hovered_id.is_some(), |d| d.cursor_pointer())
             .on_mouse_move(cx.listener({
@@ -2564,7 +2567,7 @@ impl BrandRegionsScreen {
             }));
 
         let col_head = div()
-            .h(px(28.))
+            .h(px(24.))
             .px(px(8.))
             .flex_none()
             .flex()
@@ -2588,22 +2591,22 @@ impl BrandRegionsScreen {
             for (si, &w_bar) in widths.iter().enumerate() {
                 skel_col = skel_col.child(
                     div()
-                        .h(px(40.))
+                        .h(px(29.))
                         .px(px(8.))
                         .when(si > 0, |d| d.border_t_1().border_color(p.line))
                         .flex()
                         .items_center()
                         .justify_between()
-                        .gap(px(12.))
+                        .gap(px(10.))
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(10.))
+                                .gap(px(8.))
                                 .child(pro_skeleton_bar(16., 11., 2.5, skel_phase, cx))
                                 .child(pro_skeleton_bar(w_bar, 9., 4., skel_phase, cx)),
                         )
-                        .child(pro_skeleton_bar(84., 9., 4., skel_phase, cx)),
+                        .child(pro_skeleton_bar(76., 9., 4., skel_phase, cx)),
                 );
             }
             skel_col.into_any_element()
@@ -2645,65 +2648,64 @@ impl BrandRegionsScreen {
                 );
                 let bar_ratio = (val / safe_max).clamp(0.0, 1.0);
                 let row_content = div()
-                    .h(px(40.))
+                    .h(px(29.))
                     .px(px(8.))
                     .flex()
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
-                    .text_size(px(13.))
+                    .text_size(px(12.5))
                     .text_color(p.ink)
                     .child(
                         div()
                             .min_w_0()
                             .flex_1()
                             .flex()
-                            .flex_col()
-                            .gap(px(4.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.))
-                                    .child(render_country_flag(&row.flag, p))
-                                    .child(div().min_w_0().truncate().child(row.name.clone())),
-                            )
-                            .child(pro_spring_bar(
-                                pro_eid(&self.id, format!("br-rbar-{}", row.id)),
-                                bar_ratio,
-                                3.0,
-                                1.5,
-                                p.chip,
-                                if is_on {
-                                    br_blue
-                                } else {
-                                    br_blue.opacity(0.65)
-                                },
-                            )),
+                            .items_center()
+                            .gap(px(7.))
+                            .child(render_country_flag(&row.flag, p))
+                            .child(div().min_w_0().truncate().child(row.name.clone())),
                     )
                     .child(
                         div()
                             .flex_none()
                             .flex()
                             .items_center()
-                            .gap(px(if compact_split { 8. } else { 10. }))
-                            .child(div().min_w(px(42.)).flex().justify_end().child(
+                            .gap(px(if compact_split { 7. } else { 9. }))
+                            .child(
+                                div()
+                                    .w(px(if compact_split { 32. } else { 44. }))
+                                    .flex_none()
+                                    .child(pro_spring_bar(
+                                        pro_eid(&self.id, format!("br-rbar-{}", row.id)),
+                                        bar_ratio,
+                                        3.0,
+                                        1.5,
+                                        p.chip,
+                                        if is_on {
+                                            br_blue
+                                        } else {
+                                            br_blue.opacity(0.65)
+                                        },
+                                    )),
+                            )
+                            .child(div().min_w(px(40.)).flex().justify_end().child(
                                 pro_rolling_number(
                                     pro_eid(&self.id, format!("br-rval-{}", row.id)),
                                     val as f64,
                                     1,
                                     "",
                                     "%",
-                                    13.,
+                                    12.5,
                                     FontWeight::MEDIUM,
                                     p.strong,
                                 ),
                             ))
-                            .child(div().min_w(px(44.)).flex().justify_end().child(
+                            .child(div().min_w(px(42.)).flex().justify_end().child(
                                 pro_swap_label(
                                     pro_eid(&self.id, format!("br-rdel-{}", row.id)),
                                     format_delta_pct(delta),
-                                    12.5,
+                                    12.,
                                     FontWeight::NORMAL,
                                     delta_color,
                                 ),
@@ -2824,18 +2826,18 @@ impl BrandRegionsScreen {
                 d.w_full().border_t_1().border_color(p.line_strong)
             })
             .min_h_0()
-            .pt(px(14.))
-            .px(px(if compact_split { 12. } else { 14. }))
-            .pb(px(6.))
+            .pt(px(10.))
+            .px(px(if compact_split { 10. } else { 12. }))
+            .pb(px(4.))
             .flex()
             .flex_col()
             .child(measure_seg)
-            .child(div().mt(px(10.)).child(col_head))
+            .child(div().mt(px(6.)).child(col_head))
             .child(list_scroll);
 
         let split_card = div()
             .w_full()
-            .when(!stack_layout, |d| d.flex_1().min_h(px(460.)))
+            .when(!stack_layout, |d| d.flex_none().h(px(target_card_h)))
             .rounded(px(10.))
             .bg(p.card)
             .border_1()

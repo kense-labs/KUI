@@ -242,7 +242,7 @@ fn chip_rect(
     let count = count.max(1);
     let narrow = width > 0. && width < 600.;
     if !narrow {
-        let chip_w = (width * 0.185).clamp(136., 184.);
+        let chip_w = (width * 0.21).clamp(148., 188.);
         let core_w = (width * 0.175).clamp(126., 152.);
         let core_h = 78.;
         let center_y = height / 2. - 14.;
@@ -630,7 +630,7 @@ impl Render for DataFlow {
                         }))
                     })
                     .when(!narrow && !is_core, |v| {
-                        v.flex_row().items_center().gap(px(12.)).px(px(16.))
+                        v.flex_row().items_center().gap(px(10.)).px(px(14.))
                     })
                     .items_center()
                     .when(observed.is_some() && observed != Some(index), |v| {
@@ -642,7 +642,7 @@ impl Render for DataFlow {
                                 .get(&node.id)
                                 .map(|&glyph| icon(glyph, 16., p.secondary).into_any_element())
                         }),
-                        |node, mark| node.child(mark),
+                        |node, mark| node.child(div().flex_none().child(mark)),
                     )
                     .child(
                         div()

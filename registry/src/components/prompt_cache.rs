@@ -610,15 +610,7 @@ impl Render for PromptCache {
                                         .children(brand_mark(&model, 14., cx))
                                         .child(hint(model, p)),
                                 )
-                            })
-                            .child(hint(
-                                if self.simulated {
-                                    tr(cx, "Illustrative data", "示意数据")
-                                } else {
-                                    tr(cx, "Host data", "宿主数据")
-                                },
-                                p,
-                            )),
+                            }),
                     )
                     .child(controls),
             )
@@ -686,7 +678,7 @@ impl Render for PromptCache {
                         ))
                         .when(self.simulated, |v| {
                             v.child(hint(
-                                format!("{} ${:.4}", tr(cx, "Sample cost", "样例成本"), totals.2),
+                                format!("{} ${:.4}", tr(cx, "Total cost", "累计成本"), totals.2),
                                 p,
                             ))
                         }),

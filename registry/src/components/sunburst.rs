@@ -186,6 +186,7 @@ pub struct Sunburst {
     arcs: Vec<ArcMotion>,
     dirty: bool,
     bounds: Rc<Cell<Bounds<Pixels>>>,
+    card_width: Rc<Cell<Pixels>>,
     counter: Option<Entity<AnimatedCounter>>,
     graph_focus: Option<FocusHandle>,
     focus_subscriptions: Vec<Subscription>,
@@ -211,6 +212,7 @@ impl Sunburst {
             arcs: vec![],
             dirty: true,
             bounds: Default::default(),
+            card_width: Default::default(),
             counter: None,
             graph_focus: None,
             focus_subscriptions: vec![],
@@ -501,14 +503,28 @@ impl Render for Sunburst {
                 }));
         }
         let focus_depth = self.focus.len();
+        let measured_card = f32::from(self.card_width.get());
+        let estimated_card = if measured_card > 0. {
+            measured_card
+        } else {
+            (f32::from(w.viewport_size().width) - 40.).clamp(240., 640.)
+        };
+        let side_by_side = estimated_card >= 520.;
+        let inner_w = (estimated_card - 50.).max(180.);
+        let ring_size = if side_by_side {
+            (inner_w * 0.47).round().clamp(220., 280.)
+        } else {
+            inner_w.clamp(200., 300.)
+        };
         let mut graph = div()
             .id("sunburst")
             .role(Role::Figure)
             .tab_index(0)
             .track_focus(&graph_focus)
             .relative()
-            .w(px(340.))
-            .h(px(340.))
+            .flex_none()
+            .w(px(ring_size))
+            .h(px(ring_size))
             .max_w_full()
             .aria_label(format!(
                 "{}. {}. {}",
@@ -743,10 +759,10 @@ impl Render for Sunburst {
             .child(
                 div()
                     .absolute()
-                    .left(relative(0.334))
-                    .top(relative(0.334))
-                    .w(relative(0.332))
-                    .h(relative(0.332))
+                    .left(relative(0.25))
+                    .top(relative(0.25))
+                    .w(relative(0.50))
+                    .h(relative(0.50))
                     .flex()
                     .flex_col()
                     .items_center()
@@ -872,17 +888,28 @@ impl Render for Sunburst {
                         .rounded_full()
                         .bg(child.color),
                 )
-                .child(div().flex_1().min_w(px(0.)).child(child.label.clone()))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .whitespace_nowrap()
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(child.label.clone()),
+                )
                 .child(
                     div()
                         .flex_none()
+                        .whitespace_nowrap()
                         .text_color(p.ink)
                         .child(self.formatted_value(child.total())),
                 )
                 .child(
                     div()
-                        .min_w(px(44.8))
+                        .min_w(px(46.))
                         .flex_none()
+                        .whitespace_nowrap()
+                        .text_align(TextAlign::Right)
                         .text_color(p.faint)
                         .child(format!("{share:.1}%")),
                 )
@@ -897,10 +924,11 @@ impl Render for Sunburst {
             }));
         let mut rows = vec![];
         table_rows(&self.root, "", self.root.total(), &mut rows);
+        let card_width = self.card_width.clone();
         column()
             .relative()
             .w_full()
-            .max_w(px(522.))
+            .max_w(px(640.))
             .gap(px(16.))
             .p(px(24.))
             .rounded(crate::foundation::surface_radius(cx))
@@ -908,6 +936,19 @@ impl Render for Sunburst {
             .border_1()
             .border_color(p.line)
             .text_color(p.ink)
+            .child(
+                canvas(
+                    move |b, w, _| {
+                        if (card_width.get() - b.size.width).abs() > px(0.5) {
+                            card_width.set(b.size.width);
+                            w.request_animation_frame();
+                        }
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
             .child(
                 row()
                     .justify_between()
@@ -967,13 +1008,18 @@ impl Render for Sunburst {
             )
             .child(
                 div()
+                    .w_full()
                     .flex()
-                    .flex_col()
-                    .gap_y(px(24.))
-                    .items_center()
-                    .justify_center()
+                    .when(!side_by_side, |d| {
+                        d.flex_col().gap_y(px(20.)).items_center().justify_center()
+                    })
+                    .when(side_by_side, |d| d.flex_row().gap(px(24.)).items_center())
                     .child(graph)
-                    .child(legend),
+                    .child(
+                        legend
+                            .when(side_by_side, |l| l.flex_1().min_w_0())
+                            .when(!side_by_side, |l| l.w_full()),
+                    ),
             )
             .child(hint(info, p))
             .child(

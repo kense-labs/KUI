@@ -191,24 +191,13 @@ impl PatchDemo {
 }
 
 impl Render for PatchDemo {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = kui::primitives::family::Paint::get(cx);
+    fn render(&mut self, _: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .w_full()
             .flex()
             .flex_col()
             .items_center()
-            .gap(px(8.))
             .child(self.control.clone())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Sample review. Nothing is written to disk.",
-                        "样例审阅，不会写入文件。",
-                    )),
-            )
     }
 }
 

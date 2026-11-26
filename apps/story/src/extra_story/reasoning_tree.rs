@@ -45,9 +45,6 @@ impl Example {
             )
             .with_model("Claude Opus 5.5")
         });
-        view.update(cx, |tree, cx| {
-            tree.step(cx);
-        });
         Self { view }
     }
 }
@@ -56,7 +53,7 @@ impl Render for Example {
         let p = Paint::get(cx);
         div()
             .size_full()
-            .min_h(px(520.))
+            .min_h(px(460.))
             .p_4()
             .bg(p.stage)
             .text_color(p.ink)
@@ -64,6 +61,6 @@ impl Render for Example {
             .flex_col()
             .items_center()
             .justify_center()
-            .child(div().w_full().max_w(px(522.)).child(self.view.clone()))
+            .child(div().w_full().max_w(px(760.)).child(self.view.clone()))
     }
 }

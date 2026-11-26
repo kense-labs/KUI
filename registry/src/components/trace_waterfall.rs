@@ -692,14 +692,14 @@ fn default_trace_root(cx: &App) -> TraceSpan {
                 3_100,
             )
             .with_end_ms(9_650)
-            .with_detail(tr(cx, "2 calls", "2 次调用"))
+            .with_detail(tr(cx, "3 calls", "3 次调用"))
             .with_io(
                 "Compare Pro & Enterprise tier copy against 2026 SaaS benchmarks.",
                 "Approved 3-tier comparison table and annual toggle copy.",
             )
             .with_children(vec![
                 TraceSpan::new("search", "web_search", TraceSpanKind::Tool, 3_200)
-                    .with_end_ms(4_700)
+                    .with_end_ms(4_500)
                     .with_detail("Linear & Vercel pricing")
                     .with_tokens(420, 1_180)
                     .with_cost(0.009)
@@ -707,11 +707,20 @@ fn default_trace_root(cx: &App) -> TraceSpan {
                         "{ \"query\": \"B2B developer tool pricing tiers 2026\" }",
                         "8 benchmark pricing pages parsed",
                     ),
+                TraceSpan::new("read_copy", "read_file", TraceSpanKind::Tool, 4_550)
+                    .with_end_ms(5_150)
+                    .with_detail("pricing/tiers.mdx")
+                    .with_tokens(310, 620)
+                    .with_cost(0.003)
+                    .with_io(
+                        "{ \"path\": \"website/pricing/tiers.mdx\" }",
+                        "Loaded current 3-tier MDX table (142 lines)",
+                    ),
                 TraceSpan::new(
                     "draft_copy",
                     tr(cx, "Draft tier comparison", "撰写套餐对比表"),
                     TraceSpanKind::Llm,
-                    4_850,
+                    5_250,
                 )
                 .with_end_ms(9_550)
                 .with_model("Claude Opus 4.6")
@@ -755,7 +764,7 @@ fn default_trace_root(cx: &App) -> TraceSpan {
                     TraceSpanKind::Tool,
                     7_200,
                 )
-                .with_end_ms(8_450)
+                .with_end_ms(8_250)
                 .with_icon("stripe")
                 .with_detail("12 active prices")
                 .with_tokens(310, 790)
@@ -765,10 +774,25 @@ fn default_trace_root(cx: &App) -> TraceSpan {
                     "12 active USD/EUR price objects matched",
                 ),
                 TraceSpan::new(
+                    "stripe_hook",
+                    "stripe.webhooks.verify",
+                    TraceSpanKind::Tool,
+                    8_300,
+                )
+                .with_end_ms(8_850)
+                .with_icon("stripe")
+                .with_detail("checkout.session.completed")
+                .with_tokens(180, 240)
+                .with_cost(0.002)
+                .with_io(
+                    "{ \"event\": \"checkout.session.completed\" }",
+                    "Signing secret & endpoint 200 OK",
+                ),
+                TraceSpan::new(
                     "validate",
                     tr(cx, "Validate checkout diff", "校验结账配置差异"),
                     TraceSpanKind::Llm,
-                    8_600,
+                    8_900,
                 )
                 .with_status(TraceSpanStatus::Running)
                 .with_model("GPT-5")
@@ -847,7 +871,7 @@ impl TraceWaterfall {
             loading: false,
             empty: false,
             started_at: Instant::now(),
-            measured_w: Rc::new(Cell::new(756.0)),
+            measured_w: Rc::new(Cell::new(806.0)),
             focus: cx.focus_handle(),
         }
     }
@@ -2516,7 +2540,7 @@ impl Render for TraceWaterfall {
             .relative()
             .w_full()
             .pt(px(4.0))
-            .pb(px(14.0))
+            .pb(px(6.0))
             .flex()
             .flex_col()
             .children(tree_els);

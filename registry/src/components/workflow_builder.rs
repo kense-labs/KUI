@@ -1859,7 +1859,12 @@ impl WorkflowBuilderScreen {
             .occlude()
             .absolute()
             .when(!compact, |d| {
-                d.top(px(54.)).bottom(px(10.)).left(px(10.)).w(px(216.))
+                let pal_w = if self.measured_width.get() < 760. {
+                    196.
+                } else {
+                    216.
+                };
+                d.top(px(54.)).bottom(px(10.)).left(px(10.)).w(px(pal_w))
             })
             .when(compact, |d| {
                 d.left(px(8.)).right(px(8.)).bottom(px(54.)).max_h(px(340.))
@@ -3640,7 +3645,13 @@ impl WorkflowBuilderScreen {
         };
 
         let width_cell = self.measured_width.clone();
-        let compact = width_cell.get() < 680.;
+        let page_w = width_cell.get();
+        let compact = if self.standalone {
+            page_w < 680.
+        } else {
+            page_w < 460.
+        };
+        let pal_w = if page_w < 760. { 196. } else { 216. };
         let p = ProPalette::get(cx);
 
         // Compute initial canvas centering once measured
@@ -3648,7 +3659,7 @@ impl WorkflowBuilderScreen {
         if !self.centered_once && cw > 300. {
             self.centered_once = true;
             let left_clear = if self.palette_open && !compact {
-                228.
+                pal_w + 12.
             } else {
                 20.
             };
@@ -4560,7 +4571,13 @@ impl WorkflowBuilderScreen {
 
         let width_probe = self.measured_width.clone();
         let ruler = canvas(
-            move |bounds, _, _| width_probe.set(f32::from(bounds.size.width)),
+            move |bounds, window, _| {
+                let nw = f32::from(bounds.size.width);
+                if nw > 20. && (width_probe.get() - nw).abs() > 1.0 {
+                    width_probe.set(nw);
+                    window.request_animation_frame();
+                }
+            },
             |_, _, _, _| {},
         )
         .w_full()

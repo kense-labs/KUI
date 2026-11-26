@@ -376,22 +376,22 @@ fn allocations(l: UiLanguage, add: f32) -> Vec<Allocation> {
 }
 fn samples(id: &str, period: usize, l: UiLanguage) -> Vec<Sample> {
     if id == "donut-chart" {
+        let counts = [
+            [4042., 1949., 1262., 1543., 698., 252.],
+            [16840., 8364., 5578., 7009., 3258., 1206.],
+            [171768., 87793., 60280., 77867., 37213., 14045.],
+        ][period.min(2)];
         return [
-            ("Search", "搜索", 16840.),
-            ("Direct", "直接访问", 8120.),
-            ("Newsletter", "通讯订阅", 5260.),
-            ("Referrals", "引荐", 6430.),
-            ("Social", "社交", 2910.),
-            ("Other", "其他", 1050.),
+            ("Search", "搜索"),
+            ("Direct", "直接访问"),
+            ("Newsletter", "通讯订阅"),
+            ("Referrals", "引荐"),
+            ("Social", "社交"),
+            ("Other", "其他"),
         ]
         .into_iter()
-        .enumerate()
-        .map(|(i, (en, zh, v))| {
-            Sample::new(
-                l.text(en, zh),
-                v * [0.24, 1., 10.2][period] * (1. + (i as f32) * 0.03 * period as f32),
-            )
-        })
+        .zip(counts)
+        .map(|((en, zh), v)| Sample::new(l.text(en, zh), v))
         .collect();
     }
     use kui::primitives::form_dates::CivilDate;
@@ -444,10 +444,21 @@ fn samples(id: &str, period: usize, l: UiLanguage) -> Vec<Sample> {
             .collect();
     }
     let count = [7, 30, 90][period];
+    let base = if id == "sparkline" {
+        [1980., 2140., 2060.][period.min(2)]
+    } else {
+        128.
+    };
+    let step = if id == "sparkline" {
+        [24., 18.5, 11.2][period.min(2)]
+    } else {
+        1.3
+    };
+    let swing = if id == "sparkline" { 135. } else { 43. };
     (0..count)
         .map(|i| {
             let value =
-                128. + (i % 7) as f32 * 12. + (i as f32 * 1.83).sin() * 43. + i as f32 * 1.3;
+                base + (i % 7) as f32 * 22. + (i as f32 * 1.83).sin() * swing + i as f32 * step;
             Sample::new(format!("{} {}", l.text("Day", "日"), i + 1), value)
         })
         .collect()
@@ -937,28 +948,59 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<FamilyStory>) -> AnyView
                     }};
                 }
                 match id.as_str() {
-                    "sparkline" => chart!(
-                        Sparkline,
-                        t("Daily active users", "每日活跃用户"),
-                        ["1W", "1M", "1Y"],
-                        0
-                    ),
+                    "sparkline" => {
+                        let deltas = [7.2_f32, 14.8, 26.4];
+                        let v = cx.new(|_| {
+                            Sparkline::new(
+                                t("Daily active users", "每日活跃用户"),
+                                samples(&id, 0, l),
+                            )
+                            .with_delta(deltas[0])
+                        });
+                        d.views.push(v.clone().into());
+                        d.selected = Some(0);
+                        d.options(&["1W", "1M", "1Y"], move |s, i, cx| {
+                            s.selected = Some(i);
+                            v.update(cx, |v, cx| {
+                                v.set_delta(Some(deltas[i.min(2)]), cx);
+                                v.set_samples(samples(&id, i, l), cx);
+                            });
+                        });
+                    }
                     "bar-chart" => chart!(
                         BarChart,
                         t("Active minutes", "活跃分钟数"),
                         [t("Week", "周"), t("Month", "月")],
                         0
                     ),
-                    "line-chart" => chart!(
-                        LineChart,
-                        t("Trial signups", "试用注册"),
-                        [
+                    "line-chart" => {
+                        let labels = [
                             t("7 days", "7 天"),
                             t("30 days", "30 天"),
-                            t("90 days", "90 天")
-                        ],
-                        1
-                    ),
+                            t("90 days", "90 天"),
+                        ];
+                        let notes = [
+                            t("vs previous 7 days", "较前 7 天"),
+                            t("vs previous 30 days", "较前 30 天"),
+                            t("vs previous 90 days", "较前 90 天"),
+                        ];
+                        let owner = cx.weak_entity();
+                        let header = cx.new(|cx| RangeBar::new(&labels, 1, owner, cx));
+                        let v = cx.new(|_| {
+                            LineChart::new(t("Trial signups", "试用注册"), samples(&id, 1, l))
+                                .with_header(header)
+                                .with_comparison_note(notes[1])
+                        });
+                        d.views.push(v.clone().into());
+                        d.selected = Some(1);
+                        d.options(&labels, move |s, i, cx| {
+                            s.selected = Some(i);
+                            v.update(cx, |v, cx| {
+                                v.set_comparison_note(notes[i.min(2)], cx);
+                                v.set_samples(samples(&id, i, l), cx);
+                            });
+                        });
+                    }
                     "activity-heatmap" => {
                         use kui::primitives::form_dates::CivilDate;
                         let weekday = |period: usize| {

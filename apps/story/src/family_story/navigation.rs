@@ -171,7 +171,7 @@ impl NavDemo {
                                         .px_2()
                                         .gap_2()
                                         .child(avatar(initials, i))
-                                        .child(label(text, 13., p.ink).flex_1())
+                                        .child(label(text, 13., p.ink).flex_1().min_w_0().truncate())
                                         .child(label(time, 11., p.faint))
                                 }))
                                 .into_any_element()
@@ -183,10 +183,11 @@ impl NavDemo {
 
                 let strip = cx.new(|_| {
                     ScrollArea::new(
-                        201.,
+                        277.,
                         Box::new(move |_, cx| {
                             let p = Paint::get(cx);
                             row()
+                                .items_start()
                                 .gap_2()
                                 .children(rooms.iter().map(|(name, zh, image)| {
                                     column()
@@ -195,12 +196,12 @@ impl NavDemo {
                                         .gap_1()
                                         .child(
                                             img(image.clone())
-                                                .h(px(163.))
+                                                .h(px(216.))
                                                 .w_full()
                                                 .rounded(surface_radius(cx))
                                                 .object_fit(ObjectFit::Cover),
                                         )
-                                        .child(label(l.text(name, zh), 13., p.ink))
+                                        .child(label(l.text(name, zh), 13., p.ink).font_weight(FontWeight::MEDIUM))
                                         .child(label(l.text("Museum collection", "博物馆馆藏"), 11., p.secondary))
                                 }))
                                 .into_any_element()
@@ -786,16 +787,23 @@ impl Render for NavDemo {
                 p.secondary,
             )),
             "scroll-area" => {
-                let mut blocks = column().w(fit(w, 520.)).gap_3();
+                let desktop = w.viewport_size().width >= px(580.);
+                let mut blocks = div()
+                    .flex()
+                    .when(desktop, |d| d.flex_row().items_stretch().w(fit(w, 720.)))
+                    .when(!desktop, |d| d.flex_col().w(fit(w, 520.)))
+                    .min_w_0()
+                    .gap_3();
                 for (i, (a, b)) in [("Activity", "动态"), ("Rooms", "房间")]
                     .into_iter()
                     .enumerate()
                 {
                     blocks = blocks.child(
                         panel(cx)
+                            .when(desktop, |c| c.flex_1().min_w_0())
                             .p_3()
-                            .gap_1()
-                            .child(label(t(a, b), 14., p.ink))
+                            .gap_2()
+                            .child(label(t(a, b), 14., p.ink).font_weight(FontWeight::MEDIUM))
                             .child(self.views[i].clone()),
                     )
                 }

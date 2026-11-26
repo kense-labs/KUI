@@ -345,9 +345,5 @@ impl Render for Example {
                         .on_click(cx.listener(|s, _, _, cx| s.replay(true, cx))),
                     ),
             )
-            .child(div().text_size(px(12.)).text_color(p.secondary).child(t(
-                "Simulated edits — nothing is saved",
-                "模拟修改，不会保存",
-            )))
     }
 }

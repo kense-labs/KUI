@@ -121,12 +121,28 @@ impl DictationButton {
             if phase == DictationPhase::Idle {
                 36.
             } else {
-                216.
+                224.
             },
             0.24,
             cx,
         );
         cx.notify();
+    }
+    /// Current lifecycle phase of the dictation control.
+    pub fn phase(&self) -> DictationPhase {
+        self.phase
+    }
+    /// Begin a dictation session from host code or a keyboard shortcut.
+    pub fn start(&mut self, cx: &mut Context<Self>) {
+        self.request(DictationEvent::Start, cx);
+    }
+    /// Snap the pill width to its current phase target without spring lag.
+    pub fn settle_motion(&mut self) {
+        self.width.reset(if self.phase == DictationPhase::Idle {
+            36.
+        } else {
+            224.
+        });
     }
     /// Capture this ID in the Start or Retry event handler and attach it to asynchronous callbacks.
     pub fn session_id(&self) -> Option<u64> {
@@ -400,17 +416,36 @@ impl Render for DictationButton {
         if !self.final_text.is_empty() || !self.interim.is_empty() {
             root = root.child(
                 div()
-                    .text_color(p.ink)
-                    .child(self.final_text.clone())
-                    .child(div().text_color(p.secondary).child(self.interim.clone())),
+                    .flex()
+                    .flex_wrap()
+                    .items_baseline()
+                    .gap(px(4.))
+                    .text_size(px(13.))
+                    .line_height(px(19.))
+                    .when(!self.final_text.is_empty(), |d| {
+                        d.child(div().text_color(p.ink).child(self.final_text.clone()))
+                    })
+                    .when(!self.interim.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .text_color(p.secondary)
+                                .child(self.interim.trim_start().to_string()),
+                        )
+                    }),
             );
         }
         if self.phase == DictationPhase::ConfirmInsert {
-            root = root.child(div().text_color(p.secondary).child(tr(
-                cx,
-                "Insertion position changed. Choose where to insert.",
-                "插入位置已改变，请选择插入位置。",
-            )));
+            root = root.child(
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .text_color(p.secondary)
+                    .child(tr(
+                        cx,
+                        "Insertion position changed. Choose where to insert.",
+                        "插入位置已改变，请选择插入位置。",
+                    )),
+            );
         }
         if self.phase == DictationPhase::Error
             || (self.phase == DictationPhase::ConfirmInsert && !self.error.is_empty())
@@ -419,6 +454,8 @@ impl Render for DictationButton {
                 div()
                     .id("dictation-error")
                     .role(Role::Alert)
+                    .text_size(px(12.))
+                    .line_height(px(18.))
                     .text_color(p.danger)
                     .child(self.error.clone()),
             );
@@ -426,7 +463,7 @@ impl Render for DictationButton {
         let mut pill = div()
             .w(px(width))
             .h(px(36.))
-            .rounded(r)
+            .rounded_full()
             .flex()
             .items_center()
             .justify_between()
@@ -439,33 +476,41 @@ impl Render for DictationButton {
                         tr(cx, "Dictate", "开始听写"),
                         36.,
                         18.,
-                        Tone::Clear,
+                        Tone::Surface,
                         cx,
                     )
                     .size(px(36.))
                     .rounded_full()
                     .p_0()
-                    .text_color(p.secondary)
-                    .hover(|s| s.bg(p.tray).text_color(p.ink))
-                    .child(icon(Glyph::Mic, 16., p.secondary))
+                    .bg(p.tray)
+                    .border_1()
+                    .border_color(p.line)
+                    .text_color(p.ink)
+                    .hover(|s| s.bg(p.hover))
+                    .child(icon(Glyph::Mic, 16., p.ink))
                     .on_click(cx.listener(|s, _, _, cx| s.request(DictationEvent::Start, cx))),
                 );
             }
             DictationPhase::Listening => {
-                let mut bars = div().flex().items_center().gap(px(2.)).h(px(20.));
+                let mut bars = div().flex().items_center().gap(px(2.5)).h(px(20.));
                 for i in 0..16 {
-                    let v = (i as f32 * 1.8).sin().abs();
+                    let wave = (i as f32 * 1.37 + self.elapsed as f32 * 0.85).sin().abs() * 0.65
+                        + (i as f32 * 0.73).cos().abs() * 0.35;
+                    let bar_h = (4. + wave * self.level.max(0.28) * 15.).clamp(4., 19.);
                     bars = bars.child(
                         div()
-                            .w(px(3.))
-                            .h(px((3. + v * self.level * 17.).min(20.)))
+                            .w(px(2.5))
+                            .h(px(bar_h))
                             .rounded_full()
-                            .bg(p.ink),
+                            .bg(p.ink.opacity(0.84)),
                     );
                 }
                 pill = pill
+                    .bg(p.tray)
+                    .border_1()
+                    .border_color(p.line)
                     .px(px(4.))
-                    .gap(px(8.))
+                    .gap(px(6.))
                     .child(
                         face(
                             "dictation-cancel",
@@ -486,10 +531,11 @@ impl Render for DictationButton {
                     .child(bars)
                     .child(
                         div()
-                            .w(px(36.))
+                            .w(px(34.))
                             .text_center()
                             .text_size(px(12.))
                             .line_height(px(16.))
+                            .font_features(FontFeatures(vec![("tnum".into(), 1)].into()))
                             .text_color(p.secondary)
                             .child(format!("{}:{:02}", self.elapsed / 60, self.elapsed % 60)),
                     )
@@ -507,7 +553,7 @@ impl Render for DictationButton {
                         .p_0()
                         .bg(p.bright)
                         .hover(|s| s.bg(p.bright.blend(p.ink.opacity(0.12))))
-                        .child(icon(Glyph::Check, 16., p.inverse))
+                        .child(icon(Glyph::Check, 15., p.inverse))
                         .on_click(
                             cx.listener(|s, _, _, cx| s.request(DictationEvent::Finalize, cx)),
                         ),
@@ -517,11 +563,16 @@ impl Render for DictationButton {
                 let original = self.final_text.clone();
                 let current = self.final_text.clone();
                 pill = pill
+                    .rounded(r)
+                    .bg(p.tray)
+                    .border_1()
+                    .border_color(p.line)
+                    .px(px(4.))
                     .child(
                         face(
                             "dictation-original",
                             tr(cx, "Original position", "原位置"),
-                            36.,
+                            30.,
                             r.into(),
                             Tone::Clear,
                             cx,
@@ -542,9 +593,9 @@ impl Render for DictationButton {
                         face(
                             "dictation-current",
                             tr(cx, "Current position", "当前位置"),
-                            36.,
+                            30.,
                             r.into(),
-                            Tone::Clear,
+                            Tone::Primary,
                             cx,
                         )
                         .px_2()
@@ -561,34 +612,41 @@ impl Render for DictationButton {
                     );
             }
             DictationPhase::Error => {
-                pill = pill.child(
-                    face(
-                        "dictation-retry",
-                        tr(cx, "Try again", "重试"),
-                        36.,
-                        r.into(),
-                        Tone::Clear,
-                        cx,
-                    )
-                    .h(px(36.))
-                    .px(px(14.))
-                    .gap(px(6.))
-                    .text_size(px(14.))
-                    .line_height(px(20.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .hover(|s| s.bg(p.ink.opacity(0.06)))
-                    .child(tr(cx, "Try again", "重试"))
-                    .on_click(cx.listener(|s, _, _, cx| s.request(DictationEvent::Retry, cx))),
-                );
+                pill = pill
+                    .rounded(r)
+                    .bg(p.tray)
+                    .border_1()
+                    .border_color(p.line)
+                    .child(
+                        face(
+                            "dictation-retry",
+                            tr(cx, "Try again", "重试"),
+                            36.,
+                            r.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .h(px(36.))
+                        .px(px(14.))
+                        .gap(px(6.))
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .hover(|s| s.bg(p.ink.opacity(0.06)))
+                        .child(tr(cx, "Try again", "重试"))
+                        .on_click(cx.listener(|s, _, _, cx| s.request(DictationEvent::Retry, cx))),
+                    );
             }
             DictationPhase::Requesting | DictationPhase::Transcribing => {
-                pill = pill.child(div().px_3().text_color(p.secondary).child(
-                    if self.phase == DictationPhase::Requesting {
-                        tr(cx, "Starting…", "正在启动…")
-                    } else {
-                        tr(cx, "Inserting…", "正在插入…")
-                    },
-                ));
+                pill = pill.bg(p.tray).border_1().border_color(p.line).child(
+                    div().px_3().text_color(p.secondary).child(
+                        if self.phase == DictationPhase::Requesting {
+                            tr(cx, "Starting…", "正在启动…")
+                        } else {
+                            tr(cx, "Inserting…", "正在插入…")
+                        },
+                    ),
+                );
             }
         }
         root.child(pill)

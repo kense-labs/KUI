@@ -31,6 +31,16 @@ impl LineChart {
         self.plot.header = Some(header.into());
         self
     }
+    /// Describe the comparison window shown beside the percentage delta.
+    pub fn with_comparison_note(mut self, note: impl Into<SharedString>) -> Self {
+        self.plot.comparison_note = Some(note.into());
+        self
+    }
+    /// Update the comparison window description beside the percentage delta.
+    pub fn set_comparison_note(&mut self, note: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.plot.comparison_note = Some(note.into());
+        cx.notify();
+    }
     pub fn set_samples(&mut self, samples: Vec<Sample>, cx: &mut Context<Self>) {
         self.plot.set_data(samples, cx);
         cx.notify()

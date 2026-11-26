@@ -307,7 +307,7 @@ impl OnboardingBrandScreen {
             empty: false,
             name_editor: None,
             focus: cx.focus_handle(),
-            measured_width: Rc::new(Cell::new(1280.)),
+            measured_width: Rc::new(Cell::new(894.)),
             opened_at: None,
         }
     }
@@ -2143,14 +2143,22 @@ impl Render for OnboardingBrandScreen {
         };
 
         let container_w = self.measured_width.get();
-        let narrow = container_w <= 900.;
+        let narrow = container_w < 740.;
         let compact_side = container_w <= 1040.;
+        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let left_pad = if narrow {
+            20.
+        } else if container_w < 980. {
+            24.
+        } else {
+            40.
+        };
         let measure_cell = self.measured_width.clone();
         let live_input = ed.read(cx).value().to_owned();
 
         let preview = (!narrow).then(|| {
             self.render_dashboard_preview(
-                container_w * 0.5,
+                (container_w * split_ratio).round(),
                 compact_side,
                 offset_y,
                 &live_input,
@@ -2197,8 +2205,12 @@ impl Render for OnboardingBrandScreen {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .w(if narrow { relative(1.0) } else { relative(0.5) })
-                    .px(px(if narrow { 20. } else { 40. }))
+                    .w(if narrow {
+                        relative(1.0)
+                    } else {
+                        relative(split_ratio)
+                    })
+                    .px(px(left_pad))
                     .py(px(24.))
                     .flex()
                     .items_center()

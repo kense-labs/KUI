@@ -43,15 +43,16 @@ impl Render for Demo {
         let p = Paint::get(cx);
         div()
             .size_full()
-            .min_h(px(520.))
+            .min_h(px(500.))
             .flex()
             .items_center()
             .justify_center()
-            .p(px(if w.viewport_size().width < px(340.) {
+            .px(px(if w.viewport_size().width < px(340.) {
                 12.
             } else {
-                24.
+                16.
             }))
+            .py(px(24.))
             .bg(p.stage)
             .text_color(p.ink)
             .child(self.chart.clone())

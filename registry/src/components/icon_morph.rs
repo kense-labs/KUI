@@ -33,6 +33,7 @@ pub struct IconMorph {
     hovered: bool,
     tint_from: f32,
     slide: Slide,
+    fade: PhaseClock,
     moment: PhaseClock,
     tile: f32,
     controlled: bool,
@@ -53,6 +54,7 @@ impl IconMorph {
             hovered: false,
             tint_from: 0.,
             slide: Slide::new(0.),
+            fade: Default::default(),
             moment: Default::default(),
             tile: 44.,
             controlled: false,
@@ -77,14 +79,17 @@ impl IconMorph {
             return;
         }
         if disabled_motion(cx) {
-            self.moment = Default::default()
-        } else if self.pair == [Glyph::Sun, Glyph::Moon] {
-            self.tint_from = self.tile_tint(self.moment.age(cx));
-            self.moment.restart(cx)
-        } else if (self.pair[0] == Glyph::Heart && on) || (self.pair[0] == Glyph::Bell && !on) {
-            self.moment.restart(cx)
+            self.tint_from = if on { 1. } else { 0. };
+            self.fade = Default::default();
+            self.moment = Default::default();
         } else {
-            self.moment = Default::default()
+            self.tint_from = self.tile_tint(self.fade.age(cx));
+            self.fade.restart(cx);
+            if (self.pair[0] == Glyph::Heart && on) || (self.pair[0] == Glyph::Bell && !on) {
+                self.moment.restart(cx);
+            } else {
+                self.moment = Default::default();
+            }
         }
         self.on = on;
         self.slide.set(if on { 1. } else { 0. }, cx);
@@ -93,40 +98,47 @@ impl IconMorph {
 }
 impl Render for IconMorph {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme_tile = self.pair == [Glyph::Sun, Glyph::Moon];
-        let p = if theme_tile {
-            Paint::for_mode(ThemeMode::Light)
-        } else {
-            Paint::get(cx)
-        };
+        let dark = Theme::global(cx).mode == ThemeMode::Dark;
+        let p = Paint::get(cx);
         let i = usize::from(self.on);
         let t = self.slide.get(w, cx);
-        let duration = if theme_tile {
-            TILE_FADE_SECONDS
-        } else if self.pair[0] == Glyph::Bell {
+        let duration = if self.pair[0] == Glyph::Bell {
             0.95
         } else {
             0.6
         };
         let age = self.moment.time(duration, w, cx);
-        let highlighted = self.hovered || (self.on && !theme_tile && self.pair[0] != Glyph::Bell);
-        let mut surface = if highlighted { p.stage } else { p.panel };
-        let mut border = if highlighted {
-            p.ink.opacity(0.20)
+        let fade_age = self.fade.time(TILE_FADE_SECONDS, w, cx);
+        let active_tint = if self.pair[0] == Glyph::Bell {
+            0.
         } else {
-            p.line
+            self.tile_tint(fade_age)
         };
-        let mut ink = p.ink;
-        let mut caption = p.secondary;
-        if theme_tile {
-            let dark = Paint::for_mode(ThemeMode::Dark);
-            let tint = self.tile_tint(age);
-            border = surface.blend(border).blend(dark.line.opacity(tint));
-            surface = surface.blend(dark.panel.opacity(tint));
-            caption =
-                (if self.hovered { p.ink } else { p.secondary }).blend(dark.ink.opacity(tint));
-            ink = caption;
-        }
+        let elev = if self.hovered {
+            active_tint.max(0.65)
+        } else {
+            active_tint
+        };
+        let base_surface: Hsla = if dark { rgb(0x1e1e22).into() } else { p.panel };
+        let elev_overlay = if dark {
+            hsla(0., 0., 1., 0.08 * elev)
+        } else {
+            hsla(0., 0., 0., 0.04 * elev)
+        };
+        let surface = base_surface.blend(elev_overlay);
+        let base_border = if dark { hsla(0., 0., 1., 0.09) } else { p.line };
+        let active_border = if dark {
+            hsla(0., 0., 1., 0.22)
+        } else {
+            p.ink.opacity(0.18)
+        };
+        let border = base_border.blend(active_border.opacity(elev));
+        let ink = p.ink;
+        let caption = if self.hovered || (self.on && self.pair[0] != Glyph::Bell) {
+            p.ink
+        } else {
+            p.secondary
+        };
         let side = self
             .tile
             .min((f32::from(w.viewport_size().width) - 28.) / 2.);

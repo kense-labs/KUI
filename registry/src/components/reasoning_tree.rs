@@ -193,6 +193,7 @@ impl ReasoningTree {
         cx: &mut Context<Self>,
     ) -> Self {
         let (nodes, stages, answer) = search(&thoughts, 2, 7);
+        let stage = stages.len();
         Self {
             question: question.into(),
             model: None,
@@ -200,7 +201,7 @@ impl ReasoningTree {
             nodes,
             stages,
             answer,
-            stage: 0,
+            stage,
             beam: 2,
             seed: 7,
             playing: false,
@@ -212,7 +213,7 @@ impl ReasoningTree {
             focus: cx.focus_handle().tab_stop(true),
             error: None,
             width: Rc::new(Cell::new(px(0.))),
-            stage_motion: std::array::from_fn(|_| Slide::new(0.)),
+            stage_motion: std::array::from_fn(|_| Slide::new(1.)),
         }
     }
     /// Attribute the sample candidate search to its model.
@@ -241,7 +242,16 @@ impl ReasoningTree {
     }
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         (self.nodes, self.stages, self.answer) = search(&self.thoughts, self.beam, self.seed);
-        self.restart(cx);
+        self.stage = self.stages.len();
+        self.playing = false;
+        self.progress = 0.;
+        self.last_frame = None;
+        self.selected = 0;
+        self.collapsed.clear();
+        for animation in &mut self.stage_motion {
+            animation.reset(1.);
+        }
+        cx.notify();
     }
     pub fn restart(&mut self, cx: &mut Context<Self>) {
         self.stage = 0;
@@ -338,10 +348,12 @@ impl Render for ReasoningTree {
         let measured = self.width.get();
         let graph_width = if measured > px(0.) {
             (measured - px(42.)).max(px(1.))
+        } else if viewport.width > px(0.) {
+            (viewport.width - px(64.)).min(px(718.)).max(px(1.))
         } else {
-            (viewport.width - px(64.)).min(px(728.)).max(px(1.))
+            px(680.)
         };
-        let wide = graph_width + px(42.) >= px(670.);
+        let wide = graph_width + px(42.) >= px(520.);
         let capture = self.width.clone();
         let animation: Vec<f32> = self
             .stage_motion
@@ -542,8 +554,9 @@ impl Render for ReasoningTree {
                 cx.stop_propagation();
                 cx.notify();
             }));
-        let column = f32::from(graph_width) / 3.;
-        let node_width = (column - 12.).clamp(120., 210.);
+        let gap_x = ((f32::from(graph_width) - 330.).max(12.) * 0.08).clamp(12., 24.);
+        let node_width = ((f32::from(graph_width) - gap_x * 2.) / 3.).clamp(108., 224.);
+        let col_step = node_width + gap_x;
         let mut answer_path = Vec::new();
         if completed {
             let mut current = self.answer;
@@ -554,7 +567,7 @@ impl Render for ReasoningTree {
         }
         if wide {
             let graph_height = px(rows * 56. + 12.);
-            let edges: Vec<(f32, f32, f32, f32, f32)> = visible
+            let edges: Vec<(f32, f32, f32, f32, f32, bool)> = visible
                 .iter()
                 .filter_map(|i| {
                     let node = &self.nodes[*i];
@@ -563,11 +576,12 @@ impl Render for ReasoningTree {
                         return None;
                     }
                     Some((
-                        self.nodes[parent].depth as f32 * column + node_width,
+                        self.nodes[parent].depth as f32 * col_step + node_width,
                         positions[parent] * 56. + 22.,
-                        node.depth as f32 * column,
+                        node.depth as f32 * col_step,
                         positions[*i] * 56. + 22.,
                         animation[node.depth].clamp(0., 1.),
+                        answer_path.contains(&parent) && answer_path.contains(i),
                     ))
                 })
                 .collect();
@@ -575,15 +589,25 @@ impl Render for ReasoningTree {
                 canvas(
                     |_, _, _| (),
                     move |bounds, _, w, _| {
-                        for (x0, y0, x1, y1, opacity) in &edges {
-                            let mut path = PathBuilder::stroke(px(1.25));
-                            let mid = (x0 + x1) / 2.;
+                        for (x0, y0, x1, y1, opacity, on_answer) in &edges {
+                            let mut path =
+                                PathBuilder::stroke(px(if *on_answer { 1.5 } else { 1.25 }));
                             path.move_to(bounds.origin + point(px(*x0), px(*y0)));
-                            path.line_to(bounds.origin + point(px(mid), px(*y0)));
-                            path.line_to(bounds.origin + point(px(mid), px(*y1)));
-                            path.line_to(bounds.origin + point(px(*x1), px(*y1)));
+                            for step in 1..=20 {
+                                let t = step as f32 / 20.;
+                                let k = t * t * (3. - 2. * t);
+                                path.line_to(
+                                    bounds.origin
+                                        + point(px(x0 + (x1 - x0) * t), px(y0 + (y1 - y0) * k)),
+                                );
+                            }
                             if let Ok(path) = path.build() {
-                                w.paint_path(path, p.secondary.opacity(*opacity * 0.55));
+                                let color = if *on_answer {
+                                    p.bright.opacity(*opacity * 0.78)
+                                } else {
+                                    p.secondary.opacity(*opacity * 0.48)
+                                };
+                                w.paint_path(path, color);
                             }
                         }
                     },
@@ -764,7 +788,7 @@ impl Render for ReasoningTree {
             if wide {
                 entry = entry
                     .absolute()
-                    .left(px(node.depth as f32 * column))
+                    .left(px(node.depth as f32 * col_step))
                     .top(px(positions[index] * 56.))
                     .w(px(node_width))
                     .h(px(44.));

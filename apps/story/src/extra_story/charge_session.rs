@@ -22,7 +22,6 @@ pub fn story(id: &str, _: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
                     },
                     cx,
                 )
-                .with_style(|view| view.max_w(px(520.)))
                 .with_visibility(|cx| {
                     cx.try_global::<crate::StoryBridge>()
                         .is_none_or(|bridge| (bridge.visible)())
@@ -39,11 +38,11 @@ impl Render for Demo {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
-            .min_h(px(890.))
+            .min_h(px(560.))
             .flex()
             .items_center()
             .justify_center()
-            .px(px(12.))
+            .px(px(16.))
             .py(px(24.))
             .child(self.0.clone())
     }

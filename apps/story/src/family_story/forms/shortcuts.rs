@@ -160,10 +160,20 @@ impl ShortcutDemo {
 impl Render for ShortcutDemo {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Paint::get(cx);
-        let narrow = w.viewport_size().width < px(425.);
-        let inset = px(if narrow { 16. } else { 24. });
+        let vw = w.viewport_size().width;
+        let two_col = vw >= px(620.);
+        let narrow = vw < px(425.);
+        let inset = px(if narrow {
+            16.
+        } else if two_col {
+            20.
+        } else {
+            24.
+        });
         let header = row()
             .justify_between()
+            .flex_wrap()
+            .gap(px(8.))
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
@@ -171,7 +181,11 @@ impl Render for ShortcutDemo {
                     .child(tr(cx, "Shortcuts", "快捷键")),
             )
             .child(div().w(px(148.)).flex_none().child(self.chooser.clone()));
-        let mut form = col().p(inset).gap(px(16.)).child(header);
+        let mut form = col()
+            .when(two_col, |c| c.flex_1().min_w_0())
+            .p(inset)
+            .gap(px(16.))
+            .child(header);
         for field in &self.fields {
             form = form.child(field.clone())
         }
@@ -253,7 +267,8 @@ impl Render for ShortcutDemo {
             )
         }
         let mut list = col()
-            .border_t_1()
+            .when(two_col, |c| c.flex_1().min_w_0().border_l_1())
+            .when(!two_col, |c| c.border_t_1())
             .border_color(p.line)
             .bg(p.panel.blend(p.stage.opacity(0.30)))
             .p(inset)
@@ -322,10 +337,14 @@ impl Render for ShortcutDemo {
             list = list
                 .child(hint(tr(cx, "No matching shortcuts", "没有匹配的快捷键"), cx).py(px(16.)))
         }
-        col()
+        div()
             .id("shortcuts-demo")
             .w_full()
-            .max_w(px(522.))
+            .max_w(px(if two_col { 720. } else { 522. }))
+            .min_w_0()
+            .flex()
+            .when(two_col, |d| d.flex_row().items_stretch())
+            .when(!two_col, |d| d.flex_col())
             .gap_0()
             .border_1()
             .border_color(p.line)

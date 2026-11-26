@@ -40,6 +40,8 @@ const CLICKUP_COLOR_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" widt
 
 const SLACK_MONO_SVG: &str = r#"<path fill="currentColor" d="M5.04 15.17a2.53 2.53 0 0 1-2.52 2.52A2.53 2.53 0 0 1 0 15.17a2.53 2.53 0 0 1 2.52-2.53h2.52zm1.27 0a2.53 2.53 0 0 1 2.53-2.53 2.53 2.53 0 0 1 2.52 2.53v6.31A2.53 2.53 0 0 1 8.84 24a2.53 2.53 0 0 1-2.53-2.52zM8.84 5.04a2.53 2.53 0 0 1-2.53-2.52A2.53 2.53 0 0 1 8.84 0a2.53 2.53 0 0 1 2.52 2.52v2.52zm0 1.27a2.53 2.53 0 0 1 2.52 2.53 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.84a2.53 2.53 0 0 1 2.52-2.53zM18.96 8.84a2.53 2.53 0 0 1 2.52-2.53A2.53 2.53 0 0 1 24 8.84a2.53 2.53 0 0 1-2.52 2.52h-2.52zm-1.27 0a2.53 2.53 0 0 1-2.53 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.16 0a2.53 2.53 0 0 1 2.53 2.52zM15.16 18.96a2.53 2.53 0 0 1 2.53 2.52A2.53 2.53 0 0 1 15.16 24a2.53 2.53 0 0 1-2.52-2.52v-2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.53 2.53 2.53 0 0 1 2.52-2.52h6.32A2.53 2.53 0 0 1 24 15.16a2.53 2.53 0 0 1-2.52 2.53z"></path>"#;
 
+const SLACK_COLOR_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"><path fill="#E01E5A" d="M5.04 15.17a2.53 2.53 0 0 1-2.52 2.52A2.53 2.53 0 0 1 0 15.17a2.53 2.53 0 0 1 2.52-2.53h2.52v2.53zm1.27 0a2.53 2.53 0 0 1 2.53-2.53 2.53 2.53 0 0 1 2.52 2.53v6.31A2.53 2.53 0 0 1 8.84 24a2.53 2.53 0 0 1-2.53-2.52v-6.31z"/><path fill="#36C5F0" d="M8.84 5.04a2.53 2.53 0 0 1-2.53-2.52A2.53 2.53 0 0 1 8.84 0a2.53 2.53 0 0 1 2.52 2.52v2.52H8.84zm0 1.27a2.53 2.53 0 0 1 2.52 2.53 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.84a2.53 2.53 0 0 1 2.52-2.53h6.32z"/><path fill="#2EB67D" d="M18.96 8.84a2.53 2.53 0 0 1 2.52-2.53A2.53 2.53 0 0 1 24 8.84a2.53 2.53 0 0 1-2.52 2.52h-2.52V8.84zm-1.27 0a2.53 2.53 0 0 1-2.53 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.16 0a2.53 2.53 0 0 1 2.53 2.52v6.32z"/><path fill="#ECB22E" d="M15.16 18.96a2.53 2.53 0 0 1 2.53 2.52A2.53 2.53 0 0 1 15.16 24a2.53 2.53 0 0 1-2.52-2.52v-2.52h2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.53 2.53 2.53 0 0 1 2.52-2.52h6.32A2.53 2.53 0 0 1 24 15.16a2.53 2.53 0 0 1-2.52 2.53h-6.32z"/></svg>"##;
+
 const ZENDESK_MONO_SVG: &str = r#"<path fill="currentColor" d="M12.914 2.904V16.29L24 2.905H12.914zM0 2.906C0 5.966 2.483 8.45 5.543 8.45s5.542-2.484 5.543-5.544H0zm11.086 4.807L0 21.096h11.086V7.713zm7.37 7.84c-3.063 0-5.542 2.48-5.542 5.543H24c0-3.06-2.48-5.543-5.543-5.543z"></path>"#;
 
 type CustomIconFn = Rc<dyn Fn(bool, f32, &mut Window, &mut App) -> AnyElement>;
@@ -368,6 +370,7 @@ fn render_integration_mark(
     // Active center pill shows full-color provider artwork (or dark/light ink for `mono` logos)
     match key.as_str() {
         "snowflake" => pro_svg("0 0 60 61", SNOWFLAKE_MONO_SVG, side, rgb(0x29b5e8).into()),
+        "slack" => pro_raw_svg(SLACK_COLOR_SVG, side * 0.88, side * 0.88),
         "okta" => pro_svg("0 0 24 24", OKTA_AURA_SVG, side, mono_center),
         "clickup" => pro_raw_svg(CLICKUP_COLOR_SVG, side * 0.86, side),
         "zendesk" => pro_svg("0 0 24 24", ZENDESK_MONO_SVG, side * 0.88, mono_center),
@@ -937,9 +940,13 @@ impl Render for IntegrationFlow {
             .into()
         });
 
-        let kense_logo_px = (badge_d * 0.54).round().max(14.);
-        let kense_hub_mark = pro_app_artwork("kense", kense_logo_px, cx)
-            .unwrap_or_else(|| pro_icon(ProIcon::Sparkles, kense_logo_px, active_title_c));
+        let kense_logo_px = (badge_d * 0.56).round().max(14.);
+        let kense_hub_mark = pro_svg(
+            "0 0 60 61",
+            SNOWFLAKE_MONO_SVG,
+            kense_logo_px,
+            rgb(0x29b5e8).into(),
+        );
 
         let badge_bg: Hsla = if dark {
             rgb(0x27272b).into()

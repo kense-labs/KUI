@@ -506,6 +506,7 @@ fn painted_highlight_matches_the_laid_out_segment() {
 
 #[test]
 fn sun_moon_tile_colors_match_the_selected_mode_in_each_page_theme() {
+    use gpui::{Hsla, hsla, rgb};
     use kui::{foundation::ThemeMode, primitives::family::Paint};
 
     for mode in [ThemeMode::Light, ThemeMode::Dark] {
@@ -513,23 +514,36 @@ fn sun_moon_tile_colors_match_the_selected_mode_in_each_page_theme() {
         app.update(|cx| Theme::global_mut(cx).set_mode(mode));
         let (_, w) = app.add_window_view(|w, cx| FamilyStory::new("icon-morph", w, cx));
         let neighbor = w.debug_bounds("Open menu").unwrap();
-        for (label, tile_mode) in [
-            ("Switch tile to dark", ThemeMode::Light),
-            ("Switch tile to light", ThemeMode::Dark),
+        let dark = mode == ThemeMode::Dark;
+        let rest: Hsla = if dark {
+            rgb(0x1e1e22).into()
+        } else {
+            Paint::for_mode(mode).panel
+        };
+        let toggled = rest.blend(if dark {
+            hsla(0., 0., 1., 0.08)
+        } else {
+            hsla(0., 0., 0., 0.04)
+        });
+        for (label, tile_color) in [
+            ("Switch tile to dark", rest),
+            ("Switch tile to light", toggled),
         ] {
             let tile = w.debug_bounds(label).unwrap();
+            // After click, the cursor still hovers `tile`; move off so toggled rest tint is measured cleanly.
+            w.simulate_mouse_move(gpui::point(px(2.), px(2.)), None, Modifiers::default());
+            tick(w, 200);
             w.update(|window, cx| {
                 assert_eq!(Theme::global(cx).mode, mode);
                 let scale = window.scale_factor();
-                for (bounds, palette_mode) in [(tile, tile_mode), (neighbor, mode)] {
-                    let color = Paint::for_mode(palette_mode).panel;
+                for (bounds, color) in [(tile, tile_color), (neighbor, rest)] {
                     let expected = bounds.scale(scale);
                     let painted = window.painted_quads().iter().any(|quad| {
                         quad.background == color.into()
                             && quad.bounds.contains(&expected.center())
                             && (quad.bounds.size.width - expected.size.width).0.abs() <= scale
                     });
-                    assert!(painted, "{tile_mode:?} tile on a {mode:?} page");
+                    assert!(painted, "{label} tile on a {mode:?} page");
                 }
             });
             click(w, label);

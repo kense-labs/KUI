@@ -21,13 +21,13 @@ use gpui::{prelude::*, *};
 use std::{cell::Cell, f32::consts::TAU, rc::Rc};
 use web_time::Instant;
 
-const DEFAULT_PANEL_W: f32 = 676.0;
+const DEFAULT_PANEL_W: f32 = 608.0;
 const PANEL_PAD_X: f32 = 14.0;
 const PANEL_PAD_TOP: f32 = 12.0;
 const PANEL_PAD_BOTTOM: f32 = 10.0;
 const PANEL_GAP: f32 = 10.0;
 const FOOT_H: f32 = 22.0;
-const CELL_SIDE: f32 = 10.5;
+const CELL_SIDE: f32 = 11.5;
 const CELL_GAP: f32 = 3.0;
 const TIP_W: f32 = 252.0;
 
@@ -82,56 +82,56 @@ fn status_colors(status: FanOutStatus, p: &ProPalette) -> StatusColors {
     if p.dark {
         match status {
             FanOutStatus::Queued => StatusColors {
-                bg: hsla(0., 0., 1., 0.05),
-                edge: hsla(0., 0., 1., 0.09),
+                bg: hsla(0., 0., 1., 0.095),
+                edge: hsla(0., 0., 1., 0.16),
                 ink: p.muted,
             },
             FanOutStatus::Running => StatusColors {
-                bg: p.blue.opacity(0.24),
-                edge: p.blue.opacity(0.50),
+                bg: p.blue.opacity(0.46),
+                edge: p.blue.opacity(0.74),
                 ink: rgb(0x8bcbfe).into(),
             },
             FanOutStatus::Retrying => StatusColors {
-                bg: p.orange.opacity(0.24),
-                edge: p.orange.opacity(0.50),
+                bg: p.orange.opacity(0.46),
+                edge: p.orange.opacity(0.74),
                 ink: p.amber_ink,
             },
             FanOutStatus::Done => StatusColors {
-                bg: p.green.opacity(0.22),
-                edge: p.green.opacity(0.42),
+                bg: p.green.opacity(0.44),
+                edge: p.green.opacity(0.66),
                 ink: rgb(0x5fc88a).into(),
             },
             FanOutStatus::Failed => StatusColors {
-                bg: p.red.opacity(0.24),
-                edge: p.red.opacity(0.50),
+                bg: p.red.opacity(0.48),
+                edge: p.red.opacity(0.76),
                 ink: p.red_ink,
             },
         }
     } else {
         match status {
             FanOutStatus::Queued => StatusColors {
-                bg: hsla(0., 0., 0., 0.035),
-                edge: hsla(0., 0., 0., 0.07),
+                bg: hsla(240. / 360., 0.05, 0.12, 0.075),
+                edge: hsla(0., 0., 0., 0.13),
                 ink: p.muted,
             },
             FanOutStatus::Running => StatusColors {
-                bg: hsla(215. / 360., 1.0, 0.44, 0.16),
-                edge: hsla(215. / 360., 1.0, 0.44, 0.30),
+                bg: hsla(215. / 360., 1.0, 0.48, 0.34),
+                edge: hsla(215. / 360., 1.0, 0.44, 0.56),
                 ink: p.accent_info,
             },
             FanOutStatus::Retrying => StatusColors {
-                bg: hsla(37. / 360., 1.0, 0.50, 0.19),
-                edge: p.orange.opacity(0.45),
+                bg: hsla(37. / 360., 1.0, 0.50, 0.36),
+                edge: p.orange.opacity(0.62),
                 ink: p.amber_ink,
             },
             FanOutStatus::Done => StatusColors {
-                bg: p.green.opacity(0.20),
-                edge: p.green.opacity(0.38),
+                bg: p.green.opacity(0.40),
+                edge: p.green.opacity(0.58),
                 ink: hsla(142. / 360., 1.0, 0.25, 0.88),
             },
             FanOutStatus::Failed => StatusColors {
-                bg: hsla(11. / 360., 1.0, 0.48, 0.18),
-                edge: p.red.opacity(0.48),
+                bg: hsla(11. / 360., 1.0, 0.48, 0.35),
+                edge: p.red.opacity(0.64),
                 ink: hsla(10. / 360., 1.0, 0.42, 0.86),
             },
         }
@@ -941,11 +941,11 @@ impl Render for FanOutGrid {
                     let stroke_c = if is_active || is_pinned {
                         sc.ink.opacity(alpha)
                     } else {
-                        sc.edge.opacity(alpha * 0.45)
+                        sc.edge.opacity(alpha * 0.78)
                     };
                     window.paint_quad(quad(
                         rect,
-                        Corners::all(px(2.6 * scale.min(1.15))),
+                        Corners::all(px(2.2 * scale.min(1.15))),
                         sc.bg.opacity(alpha),
                         Edges::all(px(1.0)),
                         stroke_c,

@@ -219,16 +219,14 @@ impl Example {
                 _ => {}
             },
         );
-        let mut this = Self {
+        Self {
             view,
             language,
             failed: false,
             scenario: 0,
             generation: 0,
             _sub: sub,
-        };
-        this.show(0, cx);
-        this
+        }
     }
     fn show(&mut self, scenario: usize, cx: &mut Context<Self>) {
         self.scenario = scenario;
@@ -250,7 +248,7 @@ impl Example {
         if scenario == 0 {
             cx.spawn(async move |this, cx| {
                 cx.background_executor()
-                    .timer(Duration::from_millis(1100))
+                    .timer(Duration::from_millis(900))
                     .await;
                 let _ = this.update(cx, |s, cx| {
                     if generation == s.generation {
@@ -277,15 +275,6 @@ impl Render for Example {
             .items_center()
             .justify_start()
             .gap_3()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.secondary)
-                    .child(self.language.text(
-                        "Sample notes — actions are simulated",
-                        "样例纪要，发送操作为模拟",
-                    )),
-            )
             .child(
                 row().justify_center().flex_wrap().children(
                     [

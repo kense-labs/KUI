@@ -7,9 +7,8 @@
 use crate::{
     components::pro_chrome::{
         ProBtnStyle, ProPalette, pro_btn, pro_card_shadow, pro_ease, pro_eid, pro_empty_state,
-        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_rolling_number,
-        pro_selection_sensor, pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner,
-        pro_view_transition, tr,
+        pro_mark_selected, pro_mix_color, pro_pill_indicator, pro_selection_sensor,
+        pro_skeleton_bar, pro_spring_f32, pro_tactile, pro_toast_banner, pro_view_transition, tr,
     },
     foundation::Theme,
     primitives::{
@@ -1772,7 +1771,7 @@ impl KpiBoardBlock {
                     .truncate()
                     .child(card_label.clone()),
             )
-            .child(pro_rolling_number(
+            .child(comma_rolling_number(
                 pro_eid(&self.id, format!("stat-num-{}", spec.id)),
                 shown_val,
                 spec.decimals,
@@ -2137,7 +2136,7 @@ impl KpiBoardBlock {
                             .child(div().text_size(px(13.)).text_color(p.text).child(ov_title))
                             .when_some(seg_control, |d, sc| d.child(sc)),
                     )
-                    .child(pro_rolling_number(
+                    .child(comma_rolling_number(
                         pro_eid(&self.id, "ov-total-num"),
                         cur_total / 1000.0,
                         1,
@@ -2488,7 +2487,7 @@ impl KpiBoardBlock {
                             .flex_wrap()
                             .items_center()
                             .gap(px(8.))
-                            .child(pro_rolling_number(
+                            .child(comma_rolling_number(
                                 pro_eid(&self.id, "focus-num"),
                                 cur_total,
                                 0,
@@ -2548,7 +2547,7 @@ impl KpiBoardBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(prev_lbl)
-                                    .child(pro_rolling_number(
+                                    .child(comma_rolling_number(
                                         pro_eid(&self.id, "focus-leg-prev"),
                                         legend_prev,
                                         0,
@@ -2565,7 +2564,7 @@ impl KpiBoardBlock {
                                     .items_center()
                                     .gap(px(5.))
                                     .child(cur_lbl)
-                                    .child(pro_rolling_number(
+                                    .child(comma_rolling_number(
                                         pro_eid(&self.id, "focus-leg-cur"),
                                         legend_cur,
                                         0,
@@ -2823,6 +2822,126 @@ impl Render for KpiBoardBlock {
             .child(top_bar)
             .child(body)
             .child(pro_toast_banner(self.toast.clone()))
+    }
+}
+
+struct CommaRollState {
+    target: f64,
+    from: f64,
+    dir: f32,
+    clock: PhaseClock,
+}
+
+#[derive(IntoElement)]
+struct CommaRollingNumber {
+    id: ElementId,
+    value: f64,
+    decimals: usize,
+    prefix: SharedString,
+    suffix: SharedString,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+}
+
+impl RenderOnce for CommaRollingNumber {
+    fn render(self, w: &mut Window, cx: &mut App) -> impl IntoElement {
+        let val = if self.value.is_finite() {
+            self.value
+        } else {
+            0.0
+        };
+        let st = w.use_keyed_state(pro_eid(&self.id, "crnum"), cx, |_, _| CommaRollState {
+            target: val,
+            from: val,
+            dir: 1.,
+            clock: PhaseClock::default(),
+        });
+        let (shown, dy) = st.update(cx, |s, cx| {
+            let age_cur = s.clock.time(0.28, w, cx);
+            let cur_t = pro_ease((age_cur / 0.28).clamp(0., 1.)) as f64;
+            if (s.target - val).abs() > 1e-6 {
+                s.from += (s.target - s.from) * cur_t;
+                s.dir = if val >= s.target { 1. } else { -1. };
+                s.target = val;
+                s.clock.restart(cx);
+            }
+            let age = s.clock.time(0.28, w, cx);
+            let t = pro_ease((age / 0.28).clamp(0., 1.));
+            let v = s.from + (s.target - s.from) * (t as f64);
+            let offset = if t >= 0.999 || disabled_motion(cx) {
+                0.
+            } else {
+                2.5 * s.dir * (1. - t)
+            };
+            (v, offset)
+        });
+        let formatted = format!(
+            "{}{}{}",
+            self.prefix,
+            format_comma_f64(shown, self.decimals),
+            self.suffix
+        );
+        div()
+            .relative()
+            .top(px(dy))
+            .text_size(px(self.font_size))
+            .font_weight(self.weight)
+            .text_color(self.color)
+            .child(formatted)
+            .into_any_element()
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn comma_rolling_number(
+    id: impl Into<ElementId>,
+    value: f64,
+    decimals: usize,
+    prefix: impl Into<SharedString>,
+    suffix: impl Into<SharedString>,
+    font_size: f32,
+    weight: FontWeight,
+    color: Hsla,
+) -> AnyElement {
+    CommaRollingNumber {
+        id: id.into(),
+        value,
+        decimals,
+        prefix: prefix.into(),
+        suffix: suffix.into(),
+        font_size,
+        weight,
+        color,
+    }
+    .into_any_element()
+}
+
+fn format_comma_f64(value: f64, decimals: usize) -> String {
+    let v = if value.is_finite() { value } else { 0.0 };
+    let neg = v < -1e-9;
+    let raw = format!("{:.*}", decimals, v.abs());
+    let (int_part, frac_part) = match raw.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (raw.as_str(), None),
+    };
+    let mut rev = String::with_capacity(int_part.len() + 4);
+    for (idx, ch) in int_part.chars().rev().enumerate() {
+        if idx > 0 && idx % 3 == 0 {
+            rev.push(',');
+        }
+        rev.push(ch);
+    }
+    let grouped: String = rev.chars().rev().collect();
+    let sign = if neg && (grouped != "0" || frac_part.is_some_and(|f| f.chars().any(|c| c != '0')))
+    {
+        "-"
+    } else {
+        ""
+    };
+    match frac_part {
+        Some(f) => format!("{sign}{grouped}.{f}"),
+        None => format!("{sign}{grouped}"),
     }
 }
 

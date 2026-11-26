@@ -313,28 +313,20 @@ fn mark_bounds(items: &TokenBounds, index: usize) -> impl IntoElement {
 #[derive(Default)]
 struct StatusLabel {
     shown: SharedString,
-    previous: SharedString,
     transition: PhaseClock,
     shimmer: PhaseClock,
 }
 
 impl StatusLabel {
-    fn view(
-        &mut self,
-        next: SharedString,
-        loading: bool,
-        height: f32,
-        p: Paint,
-        w: &Window,
-        cx: &App,
-    ) -> Div {
+    fn view(&mut self, next: SharedString, loading: bool, p: Paint, w: &Window, cx: &App) -> Div {
         if self.shown != next {
             if !self.shown.is_empty() {
                 self.transition.restart(cx);
             }
-            self.previous = std::mem::replace(&mut self.shown, next.clone());
+            self.shown = next.clone();
         }
-        let progress = (self.transition.time(0.16, w, cx) / 0.16).clamp(0., 1.);
+        let progress = (self.transition.time(0.14, w, cx) / 0.14).clamp(0., 1.);
+        let fade = 0.72 + 0.28 * progress;
         let wave = if loading && !disabled_motion(cx) {
             w.request_animation_frame();
             if !self.shimmer.age(cx).is_finite() {
@@ -345,28 +337,14 @@ impl StatusLabel {
             1.
         };
         div()
-            .relative()
             .w_full()
-            .h(px(height))
+            .min_w_0()
+            .min_h(px(20.))
             .text_size(px(14.))
-            .line_height(px(19.6))
+            .line_height(px(20.))
             .text_color(p.secondary)
-            .when(progress < 1., |d| {
-                d.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .opacity(1. - progress)
-                        .child(self.previous.clone()),
-                )
-            })
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .opacity(progress * wave)
-                    .child(next),
-            )
+            .opacity(fade * wave)
+            .child(next)
     }
 }
 
@@ -771,14 +749,14 @@ fn text(label: impl Into<SharedString>, size: f32, leading: f32, ink: Hsla) -> D
 fn lane_label(name: SharedString, detail: SharedString, color: Hsla, p: Paint) -> Div {
     row()
         .gap(px(10.))
-        .h(px(32.))
+        .min_h(px(36.))
         .child(div().size(px(7.)).rounded_full().bg(color).flex_none())
-        .child(column().child(text(name, 14., 16., p.ink)).child(text(
-            detail,
-            12.,
-            15.,
-            p.secondary,
-        )))
+        .child(
+            column()
+                .gap(px(2.))
+                .child(text(name, 14., 18., p.ink).whitespace_nowrap())
+                .child(text(detail, 12., 16., p.secondary).whitespace_nowrap()),
+        )
 }
 
 fn wrap_height(
@@ -1516,7 +1494,6 @@ impl Render for SpeculativeDecoding {
         let status_view = self.status_label.view(
             status.into(),
             self.status == DecodeStatus::Loading && self.visible,
-            if narrow { 40. } else { 20. },
             p,
             w,
             cx,
@@ -1839,7 +1816,8 @@ impl Render for SpeculativeDecoding {
                     .child(
                         column()
                             .flex_1()
-                            .gap(px(2.))
+                            .min_w_0()
+                            .gap(px(4.))
                             .child(
                                 text(title.clone(), 16., 22., p.ink)
                                     .font_weight(FontWeight::MEDIUM),
@@ -1856,7 +1834,7 @@ impl Render for SpeculativeDecoding {
                     .min_w_0()
                     .opacity(if ready { 1. } else { 0.5 })
                     .when(stacked_lanes, |d| d.flex_col().gap(px(12.)))
-                    .when(!narrow, |d| d.gap(px(16.)))
+                    .when(!stacked_lanes, |d| d.gap(px(16.)))
                     .child(lane_names)
                     .child(lane_content),
             )

@@ -6,7 +6,7 @@ use kui::{
         card_stack::{CardStack, StackCard, StackFact},
         carousel::{Carousel, CarouselSlide},
         image_compare::{CompareOrientation, ImageCompare},
-        in_view_title::InViewTitle,
+        in_view_title::{InViewTitle, TitleEntrance},
         product_gallery::{ProductColor, ProductGallery, ProductPhoto, ProductSize},
         segmented_control::{FormOption, SegmentedControl, SelectionChanged},
         sheet_stack::{SheetLink, SheetPage, SheetStack, SheetStackPresentation},
@@ -14,7 +14,7 @@ use kui::{
         text_morph::TextMorph,
         text_reveal::TextReveal,
         text_shimmer::TextShimmer,
-        toast_stack::ToastStack,
+        toast_stack::{ToastId, ToastStack},
     },
     primitives::{
         control::UiLanguage,
@@ -47,14 +47,28 @@ pub fn story(id: &str, _w: &mut Window, cx: &mut Context<crate::StoryHost>) -> O
 
 enum Example {
     Reveal(Entity<TextReveal>),
-    Title(Entity<InViewTitle>),
+    Title {
+        view: Entity<InViewTitle>,
+        mode: TitleEntrance,
+    },
     Morph(Entity<TextMorph>),
-    Shimmer(Entity<TextShimmer>),
-    Slot(Entity<SlotText>),
+    Shimmer {
+        primary: Entity<TextShimmer>,
+        secondary: Entity<TextShimmer>,
+        active: bool,
+    },
+    Slot {
+        view: Entity<SlotText>,
+        period: usize,
+    },
     Compare(Entity<ImageCompare>),
     Carousel(Entity<Carousel>),
     CardStack(Entity<CardStack>),
-    ToastStack(Entity<ToastStack>),
+    ToastStack {
+        stack: Entity<ToastStack>,
+        ids: Vec<ToastId>,
+        seq: usize,
+    },
     BottomSheet(Entity<BottomSheet>),
     SheetStack(Entity<SheetStack>),
     ProductGallery(Entity<ProductGallery>),
@@ -104,22 +118,49 @@ impl Demo {
             "text-reveal" => Example::Reveal(cx.new(|cx| {
                 TextReveal::new(
                     t(
-                        "Thoughtful details make space for the work.",
-                        "让细节安静下来，让作品自然呈现。",
+                        "Small details make\nevery interaction\nfeel considered.",
+                        "微小的细节，\n让每一次交互\n都显得深思熟虑。",
                     ),
                     cx,
                 )
+                .with_heading_level(2)
             })),
-            "in-view-title" => Example::Title(
-                cx.new(|_| InViewTitle::new(t("A little more room to think", "给灵感更多空间"))),
-            ),
+            "in-view-title" => {
+                let view = cx.new(|cx| {
+                    let mut title =
+                        InViewTitle::new(t("Make progress visible", "让每一处进展清晰可见"))
+                            .with_entrance(TitleEntrance::Blur);
+                    title.replay(cx);
+                    title
+                });
+                Example::Title {
+                    view,
+                    mode: TitleEntrance::Blur,
+                }
+            }
             "text-morph" => {
                 Example::Morph(cx.new(|_| TextMorph::new(t("Make it simple", "让想法发生"))))
             }
-            "text-shimmer" => Example::Shimmer(cx.new(|cx| {
-                TextShimmer::new(t("Thinking through the details…", "正在思考细节…"), cx)
-            })),
-            "slot-text" => Example::Slot(cx.new(|_| SlotText::new("12,480"))),
+            "text-shimmer" => {
+                let primary = cx.new(|cx| {
+                    TextShimmer::new(t("Generating summary", "正在生成摘要"), cx)
+                        .with_font_size(14.)
+                });
+                let secondary = cx.new(|cx| {
+                    TextShimmer::new(t("Syncing 24 files", "正在同步 24 个文件"), cx)
+                        .with_font_size(13.5)
+                        .with_duration(std::time::Duration::from_millis(2200))
+                });
+                Example::Shimmer {
+                    primary,
+                    secondary,
+                    active: true,
+                }
+            }
+            "slot-text" => Example::Slot {
+                view: cx.new(|_| SlotText::new("$31,904").with_font_size(28.)),
+                period: 1,
+            },
             "image-compare" => {
                 let before: ImageSource = Arc::new(Image::from_bytes(
                     ImageFormat::Jpeg,
@@ -316,13 +357,69 @@ impl Demo {
                 }))
             }
             "toast-stack" => {
-                Example::ToastStack(cx.new(|_| ToastStack::new(t("Notifications", "通知"))))
+                let mut initial_id = None;
+                let stack = cx.new(|cx| {
+                    let mut s = ToastStack::new(t("Notifications", "通知"));
+                    initial_id = Some(s.push(
+                        t(
+                            "Release v2.4.0 published to production",
+                            "版本 v2.4.0 已发布至生产环境",
+                        ),
+                        Some(t("View", "查看").into()),
+                        std::time::Duration::from_secs(60),
+                        cx,
+                    ));
+                    s
+                });
+                Example::ToastStack {
+                    stack,
+                    ids: initial_id.into_iter().collect(),
+                    seq: 1,
+                }
             }
             "bottom-sheet" => {
                 let title = t("Lisbon, 3 nights", "里斯本，3 晚").to_string();
-                let details = t("Flights, hotel and bookings", "航班、酒店和行程安排").to_string();
-                let body = Box::new(move |_: &mut Window, _: &mut App| {
-                    div().child(details.clone()).into_any_element()
+                let rows = [
+                    (
+                        t("Flight", "航班"),
+                        t("Berlin → Lisbon · 09:15", "柏林 → 里斯本 · 09:15"),
+                    ),
+                    (
+                        t("Hotel", "酒店"),
+                        t(
+                            "Santa Clara 1728 · Check-in 15:00",
+                            "Santa Clara 1728 · 15:00 入住",
+                        ),
+                    ),
+                    (
+                        t("Workshop", "工坊"),
+                        t("Riverside Studio · 18 seats", "河畔工作室 · 18 个席位"),
+                    ),
+                ];
+                let body = Box::new(move |_: &mut Window, cx: &mut App| {
+                    let p = Paint::get(cx);
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .children(rows.iter().enumerate().map(|(i, (k, v))| {
+                            div()
+                                .py(px(8.))
+                                .when(i > 0, |d| d.border_t_1().border_color(p.line))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(12.))
+                                .text_size(px(13.))
+                                .child(div().text_color(p.secondary).child(*k))
+                                .child(
+                                    div()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(*v),
+                                )
+                        }))
+                        .into_any_element()
                 });
                 Example::BottomSheet(cx.new(|cx| {
                     BottomSheet::new(t("View trip details", "查看行程详情"), title, body, cx)
@@ -551,17 +648,17 @@ impl Demo {
     fn change(&mut self, cx: &mut Context<Self>) {
         self.step += 1;
         let t = |en, zh| self.language.text(en, zh);
-        match &self.content {
+        match &mut self.content {
             Example::Reveal(e) => e.update(cx, |e, cx| {
                 e.set_text(
                     t(
-                        "Thoughtful details make space for the work.",
-                        "让细节安静下来，让作品自然呈现。",
+                        "Small details make\nevery interaction\nfeel considered.",
+                        "微小的细节，\n让每一次交互\n都显得深思熟虑。",
                     ),
                     cx,
                 )
             }),
-            Example::Title(e) => e.update(cx, |e, cx| e.replay(cx)),
+            Example::Title { view, .. } => view.update(cx, |e, cx| e.replay(cx)),
             Example::Morph(e) => {
                 let (a, b) = if !self.step.is_multiple_of(2) {
                     ("Make it useful", "让细节发光")
@@ -570,22 +667,38 @@ impl Demo {
                 };
                 e.update(cx, |e, cx| e.set_text(t(a, b), cx));
             }
-            Example::Shimmer(e) => {
-                e.update(cx, |e, cx| e.set_active(self.step.is_multiple_of(2), cx))
+            Example::Shimmer {
+                primary,
+                secondary,
+                active,
+            } => {
+                *active = !*active;
+                let on = *active;
+                primary.update(cx, |e, cx| e.set_active(on, cx));
+                secondary.update(cx, |e, cx| e.set_active(on, cx));
+                cx.notify();
             }
-            Example::Slot(e) => {
-                let value = ["15,280", "9,876", "12,480"][self.step % 3];
-                e.update(cx, |e, cx| e.set_value(value, cx));
+            Example::Slot { view, period } => {
+                *period = (*period + 1) % 4;
+                let value = ["$4,820", "$31,904", "$128,450", "$1,492,000"][*period];
+                view.update(cx, |e, cx| e.set_value(value, cx));
+                cx.notify();
             }
             Example::Compare(e) => e.update(cx, |e, cx| e.set_position(0.5, cx)),
             Example::Carousel(e) => e.update(cx, |e, cx| e.set_index(0, cx)),
-            Example::CardStack(e) => e.update(cx, |e, cx| e.undo(cx)),
-            Example::BottomSheet(_) | Example::SheetStack(_) | Example::ProductGallery(_) => {}
-            Example::ToastStack(e) => {
-                let message = t("Your changes were saved", "更改已保存");
-                e.update(cx, |e, cx| {
-                    e.push(message, None, std::time::Duration::from_secs(5), cx);
+            Example::CardStack(_)
+            | Example::BottomSheet(_)
+            | Example::SheetStack(_)
+            | Example::ProductGallery(_) => {}
+            Example::ToastStack { stack, ids, seq } => {
+                *seq += 1;
+                let n = *seq;
+                let message = format!("{} v2.4.{n}", t("Published release", "已发布版本"));
+                let id = stack.update(cx, |e, cx| {
+                    e.push(message, None, std::time::Duration::from_secs(30), cx)
                 });
+                ids.push(id);
+                cx.notify();
             }
         }
     }
@@ -824,34 +937,816 @@ impl Render for Demo {
                 .justify_center()
                 .child(stage);
         }
+        if let Example::Reveal(reveal) = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let replay = t("Replay", "重新播放");
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(480.))
+                        .p(px(28.))
+                        .rounded(kui::foundation::surface_radius(cx))
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel)
+                        .flex()
+                        .flex_col()
+                        .items_start()
+                        .gap(px(16.))
+                        .child(
+                            div()
+                                .text_size(px(26.))
+                                .line_height(px(33.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(reveal.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .line_height(px(21.))
+                                .text_color(p.secondary)
+                                .child(t(
+                                    "Each word rises out of its line and sharpens as it lands.",
+                                    "每个词从行间升起，落定之时渐趋清晰。",
+                                )),
+                        )
+                        .child(
+                            face(
+                                "reveal-replay",
+                                replay,
+                                32.,
+                                kui::foundation::surface_radius(cx).into(),
+                                Tone::Surface,
+                                cx,
+                            )
+                            .px(px(12.))
+                            .border_1()
+                            .border_color(p.line)
+                            .text_size(px(12.5))
+                            .child(replay)
+                            .on_click(cx.listener(|s, _, _, cx| s.change(cx))),
+                        ),
+                );
+        }
+        if let Example::Title { view, mode } = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let current = *mode;
+            let replay = t("Replay", "重新播放");
+            let modes = [
+                (TitleEntrance::Blur, t("Blur", "柔焦")),
+                (TitleEntrance::Words, t("Words", "逐词")),
+                (TitleEntrance::Lines, t("Lines", "逐行")),
+                (TitleEntrance::Rise, t("Rise", "升起")),
+            ];
+            let radius = kui::foundation::surface_radius(cx);
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(500.))
+                        .p(px(28.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel)
+                        .flex()
+                        .flex_col()
+                        .items_start()
+                        .gap(px(14.))
+                        .child(
+                            div()
+                                .text_size(px(26.))
+                                .line_height(px(33.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(view.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .line_height(px(21.))
+                                .text_color(p.secondary)
+                                .child(t(
+                                    "Section headings enter once substantially in view, with word, line, or soft-rise choreography.",
+                                    "章节标题在进入视口后自然浮现，支持逐词、逐行与柔和升起节奏。",
+                                )),
+                        )
+                        .child(
+                            div()
+                                .pt(px(4.))
+                                .w_full()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .p(px(3.))
+                                        .rounded(radius)
+                                        .bg(p.tray)
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(2.))
+                                        .children(modes.into_iter().enumerate().map(
+                                            |(idx, (next_mode, name))| {
+                                                let selected = next_mode == current;
+                                                face(
+                                                    ("title-mode", idx),
+                                                    name,
+                                                    28.,
+                                                    radius.into(),
+                                                    Tone::Clear,
+                                                    cx,
+                                                )
+                                                .px(px(10.))
+                                                .text_size(px(12.))
+                                                .aria_toggled(selected.into())
+                                                .when(selected, |b| {
+                                                    b.bg(p.panel)
+                                                        .text_color(p.ink)
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                })
+                                                .when(!selected, |b| b.text_color(p.secondary))
+                                                .child(name)
+                                                .on_click(cx.listener(move |s, _, _, cx| {
+                                                    let lang = s.language;
+                                                    let copy = if next_mode == TitleEntrance::Lines {
+                                                        lang.text(
+                                                            "Make progress\nvisible across teams",
+                                                            "让每一处进展\n在团队间清晰可见",
+                                                        )
+                                                    } else {
+                                                        lang.text(
+                                                            "Make progress visible",
+                                                            "让每一处进展清晰可见",
+                                                        )
+                                                    };
+                                                    let rebuilt = cx.new(|cx| {
+                                                        let mut v = InViewTitle::new(copy)
+                                                            .with_entrance(next_mode);
+                                                        v.replay(cx);
+                                                        v
+                                                    });
+                                                    s.content = Example::Title {
+                                                        view: rebuilt,
+                                                        mode: next_mode,
+                                                    };
+                                                    cx.notify();
+                                                }))
+                                            },
+                                        )),
+                                )
+                                .child(
+                                    face(
+                                        "title-replay",
+                                        replay,
+                                        32.,
+                                        radius.into(),
+                                        Tone::Surface,
+                                        cx,
+                                    )
+                                    .px(px(12.))
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .text_size(px(12.5))
+                                    .child(replay)
+                                    .on_click(cx.listener(|s, _, _, cx| s.change(cx))),
+                                ),
+                        ),
+                );
+        }
+        if let Example::Shimmer {
+            primary,
+            secondary,
+            active,
+        } = &self.content
+        {
+            let t = |en, zh| self.language.text(en, zh);
+            let radius = kui::foundation::surface_radius(cx);
+            let is_active = *active;
+            let toggle_label = if is_active {
+                t("Pause", "暂停")
+            } else {
+                t("Resume", "继续")
+            };
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(480.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel)
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .px(px(18.))
+                                .py(px(12.))
+                                .border_b_1()
+                                .border_color(p.line)
+                                .bg(p.panel.blend(p.stage.opacity(0.3)))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .text_size(px(13.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(t("Workspace tasks", "工作区任务")),
+                                )
+                                .child(
+                                    face(
+                                        "shimmer-toggle",
+                                        toggle_label,
+                                        28.,
+                                        radius.into(),
+                                        Tone::Surface,
+                                        cx,
+                                    )
+                                    .px(px(10.))
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .text_size(px(12.))
+                                    .child(toggle_label)
+                                    .on_click(cx.listener(|s, _, _, cx| s.change(cx))),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .px(px(18.))
+                                .py(px(15.))
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(10.))
+                                        .child(div().size(px(7.)).rounded_full().bg(if is_active {
+                                            p.success
+                                        } else {
+                                            p.faint
+                                        }))
+                                        .child(primary.clone()),
+                                )
+                                .child(div().text_size(px(12.5)).text_color(p.faint).child(t(
+                                    "Q3 planning notes · 18 pages",
+                                    "Q3 规划笔记 · 18 页",
+                                ))),
+                        )
+                        .child(
+                            div()
+                                .px(px(18.))
+                                .py(px(14.))
+                                .border_t_1()
+                                .border_color(p.line)
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(10.))
+                                        .child(
+                                            div()
+                                                .size(px(7.))
+                                                .rounded_full()
+                                                .bg(p.ink.opacity(0.35)),
+                                        )
+                                        .child(secondary.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.5))
+                                        .text_color(p.faint)
+                                        .child(t("Brand assets", "品牌素材")),
+                                ),
+                        ),
+                );
+        }
+        if let Example::Slot { view, period } = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let radius = kui::foundation::surface_radius(cx);
+            let selected = *period;
+            let deltas = ["+6.8%", "+12.4%", "+18.2%", "+31.6%"];
+            let periods = [
+                (t("Today", "今日"), "$4,820"),
+                (t("Week", "本周"), "$31,904"),
+                (t("Month", "本月"), "$128,450"),
+                (t("Year", "全年"), "$1,492,000"),
+            ];
+            let slot_handle = view.clone();
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(460.))
+                        .p(px(22.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel)
+                        .flex()
+                        .flex_col()
+                        .gap(px(16.))
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(7.))
+                                        .child(div().size(px(7.)).rounded_full().bg(p.success))
+                                        .child(
+                                            div()
+                                                .text_size(px(13.5))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.secondary)
+                                                .child(t("Revenue", "营业收入")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(8.))
+                                        .py(px(2.))
+                                        .rounded_full()
+                                        .bg(p.success.opacity(0.12))
+                                        .text_color(p.success)
+                                        .text_size(px(12.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(deltas[selected.min(3)]),
+                                ),
+                        )
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(view.clone()))
+                        .child(
+                            div()
+                                .w_full()
+                                .p(px(3.))
+                                .rounded(radius)
+                                .bg(p.tray)
+                                .flex()
+                                .items_center()
+                                .children(periods.into_iter().enumerate().map(
+                                    |(idx, (name, amount))| {
+                                        let is_sel = idx == selected;
+                                        let handle = slot_handle.clone();
+                                        face(
+                                            ("slot-period", idx),
+                                            name,
+                                            30.,
+                                            radius.into(),
+                                            Tone::Clear,
+                                            cx,
+                                        )
+                                        .flex_1()
+                                        .text_size(px(12.5))
+                                        .aria_toggled(is_sel.into())
+                                        .when(is_sel, |b| {
+                                            b.bg(p.panel)
+                                                .text_color(p.ink)
+                                                .font_weight(FontWeight::MEDIUM)
+                                        })
+                                        .when(!is_sel, |b| b.text_color(p.secondary))
+                                        .child(name)
+                                        .on_click(
+                                            cx.listener(move |s, _, _, cx| {
+                                                if let Example::Slot { period, .. } = &mut s.content
+                                                {
+                                                    *period = idx;
+                                                }
+                                                handle.update(cx, |v, cx| v.set_value(amount, cx));
+                                                cx.notify();
+                                            }),
+                                        )
+                                    },
+                                )),
+                        ),
+                );
+        }
+        if let Example::ToastStack { stack, .. } = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let radius = kui::foundation::surface_radius(cx);
+            let active_count = stack.read(cx).len();
+            let badge_text = if self.language == UiLanguage::Chinese {
+                format!("{active_count} 条活动通知")
+            } else {
+                format!("{active_count} active")
+            };
+            let stack_view = stack.clone();
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(px(24.))
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(468.))
+                        .p(px(18.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel)
+                        .flex()
+                        .flex_col()
+                        .gap(px(14.))
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.))
+                                        .child(
+                                            div()
+                                                .text_size(px(15.))
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(p.ink)
+                                                .child(t("Release desk", "发布工作台")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(12.5))
+                                                .text_color(p.secondary)
+                                                .child(t(
+                                                    "Hover the stack below to expand and pause timers.",
+                                                    "悬停下方通知堆叠以展开并暂停自动关闭。",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(8.))
+                                        .py(px(2.))
+                                        .rounded_full()
+                                        .bg(p.stage)
+                                        .text_size(px(11.5))
+                                        .text_color(p.secondary)
+                                        .child(badge_text),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    face(
+                                        "toast-publish",
+                                        t("Publish release", "发布版本"),
+                                        32.,
+                                        radius.into(),
+                                        Tone::Primary,
+                                        cx,
+                                    )
+                                    .px(px(12.))
+                                    .text_size(px(12.5))
+                                    .child(t("Publish release", "发布版本"))
+                                    .on_click(cx.listener(|s, _, _, cx| {
+                                        let lang = s.language;
+                                        if let Example::ToastStack { stack, ids, seq } =
+                                            &mut s.content
+                                        {
+                                            *seq += 1;
+                                            let n = *seq;
+                                            let msg = if lang == UiLanguage::Chinese {
+                                                format!("版本 v2.4.{n} 已发布至生产环境")
+                                            } else {
+                                                format!("Release v2.4.{n} published to production")
+                                            };
+                                            let act = lang.text("View", "查看").into();
+                                            let id = stack.update(cx, |st, cx| {
+                                                st.push(
+                                                    msg,
+                                                    Some(act),
+                                                    std::time::Duration::from_secs(30),
+                                                    cx,
+                                                )
+                                            });
+                                            ids.push(id);
+                                            cx.notify();
+                                        }
+                                    })),
+                                )
+                                .child(
+                                    face(
+                                        "toast-upload",
+                                        t("Upload assets", "上传素材"),
+                                        32.,
+                                        radius.into(),
+                                        Tone::Surface,
+                                        cx,
+                                    )
+                                    .px(px(11.))
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .text_size(px(12.5))
+                                    .child(t("Upload assets", "上传素材"))
+                                    .on_click(cx.listener(|s, _, _, cx| {
+                                        let lang = s.language;
+                                        if let Example::ToastStack { stack, ids, .. } =
+                                            &mut s.content
+                                        {
+                                            let msg = lang.text(
+                                                "14 brand assets uploaded to CDN",
+                                                "14 个品牌素材已上传至 CDN",
+                                            );
+                                            let act = lang.text("Open", "打开").into();
+                                            let id = stack.update(cx, |st, cx| {
+                                                st.push(
+                                                    msg,
+                                                    Some(act),
+                                                    std::time::Duration::from_secs(30),
+                                                    cx,
+                                                )
+                                            });
+                                            ids.push(id);
+                                            cx.notify();
+                                        }
+                                    })),
+                                )
+                                .child(
+                                    face(
+                                        "toast-invite",
+                                        t("Invite teammate", "邀请成员"),
+                                        32.,
+                                        radius.into(),
+                                        Tone::Surface,
+                                        cx,
+                                    )
+                                    .px(px(11.))
+                                    .border_1()
+                                    .border_color(p.line)
+                                    .text_size(px(12.5))
+                                    .child(t("Invite teammate", "邀请成员"))
+                                    .on_click(cx.listener(|s, _, _, cx| {
+                                        let lang = s.language;
+                                        if let Example::ToastStack { stack, ids, .. } =
+                                            &mut s.content
+                                        {
+                                            let msg = lang.text(
+                                                "Invitation sent to Maya Chen",
+                                                "已向 Maya Chen 发送工作区邀请",
+                                            );
+                                            let act = lang.text("Undo", "撤销").into();
+                                            let id = stack.update(cx, |st, cx| {
+                                                st.push(
+                                                    msg,
+                                                    Some(act),
+                                                    std::time::Duration::from_secs(30),
+                                                    cx,
+                                                )
+                                            });
+                                            ids.push(id);
+                                            cx.notify();
+                                        }
+                                    })),
+                                )
+                                .child(
+                                    face(
+                                        "toast-dismiss-all",
+                                        t("Dismiss all", "全部关闭"),
+                                        32.,
+                                        radius.into(),
+                                        Tone::Clear,
+                                        cx,
+                                    )
+                                    .px(px(10.))
+                                    .text_size(px(12.5))
+                                    .text_color(p.secondary)
+                                    .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                                    .child(t("Dismiss all", "全部关闭"))
+                                    .on_click(cx.listener(|s, _, _, cx| {
+                                        if let Example::ToastStack { stack, ids, .. } =
+                                            &mut s.content
+                                        {
+                                            let pending = std::mem::take(ids);
+                                            stack.update(cx, |st, cx| {
+                                                for id in pending {
+                                                    st.dismiss(id, cx);
+                                                }
+                                            });
+                                            cx.notify();
+                                        }
+                                    })),
+                                ),
+                        ),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .min_h(px(108.))
+                        .flex()
+                        .items_end()
+                        .justify_center()
+                        .child(stack_view),
+                );
+        }
+        if let Example::BottomSheet(sheet) = &self.content {
+            let t = |en, zh| self.language.text(en, zh);
+            let radius = kui::foundation::surface_radius(cx);
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p_5()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .relative()
+                        .w_full()
+                        .max_w(px(522.))
+                        .h(px(460.))
+                        .rounded(radius)
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.panel.blend(p.stage.opacity(0.35)))
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .size_full()
+                                .flex()
+                                .flex_col()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .flex_col()
+                                        .child(
+                                            div()
+                                                .h(px(36.))
+                                                .px(px(14.))
+                                                .border_b_1()
+                                                .border_color(p.line)
+                                                .bg(p.panel)
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(6.))
+                                                        .children((0..3).map(|_| {
+                                                            div()
+                                                                .size(px(7.))
+                                                                .rounded_full()
+                                                                .bg(p.line)
+                                                        })),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .px(px(10.))
+                                                        .py(px(2.))
+                                                        .rounded_full()
+                                                        .bg(p.stage.opacity(0.75))
+                                                        .text_size(px(11.))
+                                                        .text_color(p.faint)
+                                                        .child("trips.kense.dev/lisbon"),
+                                                )
+                                                .child(div().w(px(33.))),
+                                        )
+                                        .child(
+                                            div()
+                                                .p(px(20.))
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(6.))
+                                                .child(
+                                                    div()
+                                                        .text_size(px(11.5))
+                                                        .text_color(p.faint)
+                                                        .child(t(
+                                                            "TEAM OFFSITE · OCT 14–17",
+                                                            "团队出行 · 10 月 14–17 日",
+                                                        )),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(18.))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(p.ink)
+                                                        .child(t(
+                                                            "Lisbon autumn studio",
+                                                            "里斯本秋季工坊",
+                                                        )),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(13.))
+                                                        .text_color(p.secondary)
+                                                        .child(t(
+                                                            "18 confirmed · Alfama & riverside loft",
+                                                            "18 人已确认 · 阿尔法玛与河畔阁楼",
+                                                        )),
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .p(px(20.))
+                                        .flex()
+                                        .gap(px(10.))
+                                        .children((0..3).map(|_| {
+                                            div()
+                                                .flex_1()
+                                                .h(px(48.))
+                                                .rounded(radius)
+                                                .border_1()
+                                                .border_color(p.line.opacity(0.7))
+                                                .bg(p.panel.opacity(0.65))
+                                        })),
+                                ),
+                        )
+                        .child(div().absolute().inset_0().child(sheet.clone())),
+                );
+        }
         let view: AnyView = match &self.content {
             Example::Reveal(e) => e.clone().into(),
-            Example::Title(e) => e.clone().into(),
+            Example::Title { view, .. } => view.clone().into(),
             Example::Morph(e) => e.clone().into(),
-            Example::Shimmer(e) => e.clone().into(),
-            Example::Slot(e) => e.clone().into(),
+            Example::Shimmer { primary, .. } => primary.clone().into(),
+            Example::Slot { view, .. } => view.clone().into(),
             Example::Compare(e) => e.clone().into(),
             Example::Carousel(e) => e.clone().into(),
             Example::CardStack(e) => e.clone().into(),
-            Example::ToastStack(e) => e.clone().into(),
+            Example::ToastStack { stack, .. } => stack.clone().into(),
             Example::BottomSheet(e) => e.clone().into(),
             Example::SheetStack(e) => e.clone().into(),
             Example::ProductGallery(e) => e.clone().into(),
         };
-        let label = match self.content {
-            Example::Reveal(_) => self.language.text("Replay", "重新播放"),
-            Example::Title(_) => self.language.text("Reveal", "显示标题"),
-            Example::Morph(_) | Example::Slot(_) => self.language.text("Change text", "切换文字"),
+        let label = match &self.content {
+            Example::Morph(_) => self.language.text("Change text", "切换文字"),
             Example::Compare(_) | Example::Carousel(_) => self.language.text("Reset", "重置"),
-            Example::CardStack(_) => self.language.text("Undo", "撤销"),
-            Example::ToastStack(_) => self.language.text("Show notification", "显示通知"),
-            Example::BottomSheet(_) | Example::SheetStack(_) | Example::ProductGallery(_) => {
-                self.language.text("Open", "打开")
-            }
-            Example::Shimmer(_) if self.step.is_multiple_of(2) => {
-                self.language.text("Pause", "暂停")
-            }
-            Example::Shimmer(_) => self.language.text("Resume", "继续"),
+            _ => self.language.text("Open", "打开"),
         };
         div()
             .size_full()
@@ -864,34 +1759,21 @@ impl Render for Demo {
             .gap(px(32.))
             .items_center()
             .justify_center()
-            .child(
-                div()
-                    .max_w_full()
-                    .when(matches!(self.content, Example::BottomSheet(_)), |d| {
-                        d.w_full().h(px(440.))
-                    })
-                    .child(view),
-            )
-            .when(
-                !matches!(
-                    self.content,
-                    Example::BottomSheet(_) | Example::SheetStack(_) | Example::ProductGallery(_)
-                ),
-                |d| {
-                    d.child(
-                        face(
-                            "change-text-motion",
-                            label,
-                            36.,
-                            kui::foundation::surface_radius(cx).into(),
-                            Tone::Surface,
-                            cx,
-                        )
-                        .px_3()
-                        .child(label)
-                        .on_click(cx.listener(|s, _, _, cx| s.change(cx))),
+            .child(div().max_w_full().child(view))
+            .when(matches!(self.content, Example::Morph(_)), |d| {
+                d.child(
+                    face(
+                        "change-text-motion",
+                        label,
+                        36.,
+                        kui::foundation::surface_radius(cx).into(),
+                        Tone::Surface,
+                        cx,
                     )
-                },
-            )
+                    .px_3()
+                    .child(label)
+                    .on_click(cx.listener(|s, _, _, cx| s.change(cx))),
+                )
+            })
     }
 }

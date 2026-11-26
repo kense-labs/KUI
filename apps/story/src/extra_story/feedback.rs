@@ -13,7 +13,6 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
 }
 struct Example {
     feedback: Entity<ResponseFeedback>,
-    language: UiLanguage,
     fail_next: bool,
     _subscription: Subscription,
 }
@@ -49,7 +48,6 @@ impl Example {
         );
         Self {
             feedback,
-            language,
             fail_next: true,
             _subscription: subscription,
         }
@@ -63,17 +61,7 @@ impl Render for Example {
             .max_w_full()
             .flex()
             .flex_col()
-            .gap(px(14.))
             .text_color(paint.ink)
             .child(self.feedback.clone())
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(paint.secondary)
-                    .child(self.language.text(
-                        "Sample only. The first submission fails so you can try again.",
-                        "仅为演示。首次提交会模拟失败，可继续重试。",
-                    )),
-            )
     }
 }

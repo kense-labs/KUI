@@ -26,7 +26,7 @@ use kui::{
         sunburst::{Sunburst, SunburstNode},
         treemap::{TreeTile, Treemap, TreemapColorScale},
         vector_search::{VectorDocument, VectorMatch, VectorSearch, VectorSearchSnapshot},
-        waffle_chart::{WaffleCategory, WaffleChart},
+        waffle_chart::{WaffleCategory, WaffleChart, WaffleTabChange},
     },
     primitives::{
         Size,
@@ -166,7 +166,16 @@ impl Demo {
                 let chart = cx.new(|_| {
                     WaffleChart::new(waffle_label(0), waffle_data(0, language))
                         .with_unit(t("TWh", "太瓦时"))
+                        .with_header(
+                            t("Electricity generation, 2023", "2023 年发电量"),
+                            waffle_subtitle(0, language),
+                        )
+                        .with_tabs(vec!["DE".into(), "FR".into(), "UK".into(), "US".into()], 0)
                 });
+                cx.subscribe(&chart, |s, _, tab: &WaffleTabChange, cx| {
+                    s.choose_step(tab.index, cx);
+                })
+                .detach();
                 let visible = cx
                     .try_global::<crate::StoryBridge>()
                     .is_none_or(|bridge| (bridge.visible)());
@@ -902,13 +911,6 @@ impl Demo {
                 FormOption::new("1", t("30 days", "30 天")),
                 FormOption::new("2", t("90 days", "90 天")),
             ],
-            // The reference demo compares countries in one grid.
-            Content::Waffle(_) => vec![
-                FormOption::new("0", t("Germany", "德国")),
-                FormOption::new("1", t("France", "法国")),
-                FormOption::new("2", t("United Kingdom", "英国")),
-                FormOption::new("3", t("United States", "美国")),
-            ],
             // The reference demo compares Lisbon with one rival at a time.
             Content::Radar(_) => vec![
                 FormOption::new("0", t("Berlin", "柏林")),
@@ -997,9 +999,13 @@ impl Demo {
             }
             Content::Waffle(chart) => {
                 let values = waffle_data(self.step, self.language);
+                let subtitle = waffle_subtitle(self.step, self.language);
+                let step = self.step;
                 chart.update(cx, |chart, cx| {
                     chart.set_categories(values, cx);
-                    chart.set_label(waffle_label(self.step), cx);
+                    chart.set_label(waffle_label(step), cx);
+                    chart.set_subtitle(subtitle, cx);
+                    chart.set_tab(step, cx);
                 });
             }
             Content::Brush(chart) => {
@@ -1159,56 +1165,80 @@ impl Render for Demo {
         }
         if let Content::Waffle(chart) = &self.content {
             chart.update(cx, |chart, cx| chart.set_visible(visible, cx));
-            let (country, total) = waffle_country(self.step);
             return div()
-                .w_full()
-                .max_w(px(640.))
-                .bg(p.panel)
+                .size_full()
+                .min_h(px(420.))
+                .p(px(20.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(p.stage)
+                .text_color(p.ink)
+                .child(chart.clone());
+        }
+        if let Content::Ridge(chart) = &self.content {
+            let options = [
+                self.language.text("Zurich", "苏黎世"),
+                self.language.text("Lisbon", "里斯本"),
+                self.language.text("Denver", "丹佛"),
+            ];
+            let dark = p.panel.l < 0.5;
+            let track_bg = if dark { p.tray } else { p.stage };
+            let active_border = if dark {
+                hsla(0., 0., 1., 0.10)
+            } else {
+                p.line.opacity(0.85)
+            };
+            let selector = row()
+                .p(px(3.))
+                .gap(px(2.))
+                .bg(track_bg)
                 .border_1()
                 .border_color(p.line)
-                .rounded(kui::foundation::surface_radius(cx))
-                .p(px(24.))
+                .rounded_full()
+                .children(options.into_iter().enumerate().map(|(i, text)| {
+                    let selected = self.step == i;
+                    face(
+                        ("radar-comparison", i),
+                        text,
+                        28.,
+                        kui::foundation::Theme::global(cx).tokens.radius.full.into(),
+                        Tone::Clear,
+                        cx,
+                    )
+                    .px(px(10.))
+                    .whitespace_nowrap()
+                    .when(selected, |v| {
+                        v.bg(p.panel)
+                            .border_1()
+                            .border_color(active_border)
+                            .shadow_xs()
+                    })
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(if selected { p.ink } else { p.secondary })
+                    .hover(|s| s.text_color(p.ink))
+                    .aria_toggled(selected.into())
+                    .child(text)
+                    .on_click(cx.listener(move |s, _, _, cx| s.choose_step(i, cx)))
+                }));
+            return div()
+                .size_full()
+                .min_h(px(520.))
+                .p(px(20.))
                 .flex()
-                .flex_col()
-                .gap(px(24.))
+                .items_center()
+                .justify_center()
+                .bg(p.stage)
+                .text_color(p.ink)
                 .child(
-                    row()
-                        .flex_wrap()
-                        .items_start()
-                        .justify_between()
-                        .gap(px(12.))
-                        .child(
-                            column()
-                                .gap(px(2.))
-                                .child(
-                                    div()
-                                        .text_size(px(16.))
-                                        .line_height(px(22.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.ink)
-                                        .child(
-                                            self.language.text(
-                                                "Electricity generation, 2023",
-                                                "2023 年发电量",
-                                            ),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(14.))
-                                        .line_height(px(20.))
-                                        .text_color(p.faint)
-                                        .child(format!(
-                                            "{}, {} {}",
-                                            country,
-                                            total,
-                                            self.language.text("TWh", "太瓦时")
-                                        )),
-                                ),
-                        )
-                        .when_some(self.periods.clone(), |view, periods| view.child(periods)),
-                )
-                .child(chart.clone());
+                    div()
+                        .relative()
+                        .w(px(560.))
+                        .max_w_full()
+                        .child(chart.clone())
+                        .child(div().absolute().top(px(11.)).right(px(14.)).child(selector)),
+                );
         }
         let label = self.language.text("Change values", "切换数值");
         let values = div()
@@ -1248,47 +1278,18 @@ impl Render for Demo {
                 Content::DataFlow(v, _) => vec![v.clone().into()],
                 Content::VectorSearch(v) => vec![v.clone().into()],
             });
-        let controls = if matches!(self.content, Content::Ridge(_)) {
-            let options = [
-                self.language.text("Zurich", "苏黎世"),
-                self.language.text("Lisbon", "里斯本"),
-                self.language.text("Denver", "丹佛"),
-            ];
-            div()
-                .flex()
-                .gap_2()
-                .children(options.into_iter().enumerate().map(|(i, text)| {
-                    face(
-                        ("radar-comparison", i),
-                        text,
-                        36.,
-                        kui::foundation::surface_radius(cx).into(),
-                        if self.step == i {
-                            Tone::Primary
-                        } else {
-                            Tone::Surface
-                        },
-                        cx,
-                    )
-                    .px(px(12.))
-                    .child(text)
-                    .on_click(cx.listener(move |s, _, _, cx| s.choose_step(i, cx)))
-                }))
-                .into_any_element()
-        } else {
-            face(
-                "change-chart-values",
-                label,
-                36.,
-                kui::foundation::surface_radius(cx).into(),
-                Tone::Surface,
-                cx,
-            )
-            .px(px(12.))
-            .child(label)
-            .on_click(cx.listener(|s, _, _, cx| s.change(cx)))
-            .into_any_element()
-        };
+        let controls = face(
+            "change-chart-values",
+            label,
+            36.,
+            kui::foundation::surface_radius(cx).into(),
+            Tone::Surface,
+            cx,
+        )
+        .px(px(12.))
+        .child(label)
+        .on_click(cx.listener(|s, _, _, cx| s.change(cx)))
+        .into_any_element();
         let ticker_header = if let Content::Ticker(_, paused) = &self.content {
             let label = if paused.get() {
                 self.language.text("Resume stream", "继续数据")
@@ -1409,6 +1410,11 @@ impl Render for Demo {
                         | Content::DataFlow(_, _)
                         | Content::VectorSearch(_)
                         | Content::Radar(_)
+                        | Content::Slope(_)
+                        | Content::Stream(_)
+                        | Content::Tree(_)
+                        | Content::Brush(_)
+                        | Content::Ridge(_)
                 ),
                 |view| view.child(controls),
             )
@@ -1766,12 +1772,12 @@ fn sunburst_data(step: usize, language: UiLanguage) -> SunburstNode {
 /// Values are back-solved from the official shares (each country's blocks
 /// tile 43/4/1/15/26/11, 14/12/65/6/1/2, 34/2/14/35/1/14 and
 /// 14/6/19/43/16/2) and sum to the published totals.
-fn waffle_country(step: usize) -> (SharedString, SharedString) {
+fn waffle_country(step: usize, language: UiLanguage) -> (SharedString, SharedString) {
     let (country, total): (&str, i64) = match step {
-        1 => ("France", 494),
-        2 => ("United Kingdom", 285),
-        3 => ("United States", 4178),
-        _ => ("Germany", 507),
+        1 => (language.text("France", "法国"), 494),
+        2 => (language.text("United Kingdom", "英国"), 285),
+        3 => (language.text("United States", "美国"), 4178),
+        _ => (language.text("Germany", "德国"), 507),
     };
     let text = {
         let digits = total.abs().to_string();
@@ -1786,8 +1792,12 @@ fn waffle_country(step: usize) -> (SharedString, SharedString) {
     };
     (country.into(), text.into())
 }
+fn waffle_subtitle(step: usize, language: UiLanguage) -> SharedString {
+    let (country, total) = waffle_country(step, language);
+    format!("{country}, {total} {}", language.text("TWh", "太瓦时")).into()
+}
 fn waffle_label(step: usize) -> SharedString {
-    let (country, _) = waffle_country(step);
+    let (country, _) = waffle_country(step, UiLanguage::English);
     format!("Electricity generation by source, {country}, 2023").into()
 }
 fn waffle_data(step: usize, language: UiLanguage) -> Vec<WaffleCategory> {

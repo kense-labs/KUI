@@ -14,12 +14,14 @@ use crate::{
         control::activate,
         editor::{EditEvent, Editor, InputMode},
         family::disabled_motion,
-        pro_icons::{ProIcon, pro_icon},
+        pro_icons::{ProIcon, pro_icon, pro_raw_svg},
     },
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 use web_time::Instant;
+
+const SHOPIFY_BAG_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none"><path d="M9.1 7.2V6.3C9.1 4.65 10.4 3.3 12.0 3.3C13.6 3.3 14.9 4.65 14.9 6.3V7.2" stroke="#95BF47" stroke-width="1.85" stroke-linecap="round"/><path d="M5.6 7.2L16.3 6.3L18.4 20.1L4.4 18.9L5.6 7.2Z" fill="#95BF47"/><path d="M16.3 6.3L19.6 7.4L18.4 20.1L16.3 6.3Z" fill="#5E8E3E"/><path d="M12.9 10.6C12.3 10.1 11.4 9.9 10.6 10.2C9.7 10.5 9.3 11.3 9.6 12.0C9.9 12.7 10.9 12.9 11.8 13.3C12.8 13.7 13.1 14.6 12.7 15.5C12.2 16.4 10.9 16.8 9.6 16.2C9.1 16.0 8.7 15.6 8.4 15.2" stroke="#FFFFFF" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>"##;
 
 /// Editable values managed inside [`IntegrationSettings`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -154,9 +156,9 @@ impl IntegrationSettings {
         let defaults = IntegrationValues::default();
         Self {
             id: id.into(),
-            provider: "stripe".into(),
-            name: "Stripe store".into(),
-            name_zh: "Stripe 商业同步".into(),
+            provider: "shopify".into(),
+            name: "Shopify store".into(),
+            name_zh: "Shopify 店铺同步".into(),
             count: Some(128),
             meta: "Connected on March 4, 2026 at 09:12".into(),
             meta_zh: "已于 2026年3月4日 09:12 连接".into(),
@@ -577,7 +579,7 @@ impl Render for IntegrationSettings {
                     ),
                     Some((
                         pro_eid(&self.id, "empty-connect"),
-                        SharedString::from(tr(cx, "Connect Stripe store", "连接示例店铺")),
+                        SharedString::from(tr(cx, "Connect Shopify store", "连接示例店铺")),
                         Box::new(|this: &mut Self, _, cx| {
                             this.empty = false;
                             cx.notify();
@@ -610,13 +612,30 @@ impl Render for IntegrationSettings {
             .to_string()
         };
 
+        let provider_tile: AnyElement = if self.provider.eq_ignore_ascii_case("shopify") {
+            div()
+                .size(px(40.))
+                .flex_none()
+                .rounded(px(10.))
+                .bg(if p.dark { rgb(0x27272b) } else { rgb(0xf4f4f5) })
+                .border_1()
+                .border_color(p.line)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(pro_raw_svg(SHOPIFY_BAG_SVG, 22., 22.))
+                .into_any_element()
+        } else {
+            pro_app_tile(&self.provider, 40., cx).into_any_element()
+        };
+
         let header = div()
             .w_full()
             .p(if narrow { px(14.) } else { px(16.) })
             .flex()
             .items_center()
             .gap(px(12.))
-            .child(pro_app_tile(&self.provider, 40., cx))
+            .child(provider_tile)
             .child(
                 div()
                     .flex_1()

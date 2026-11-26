@@ -65,10 +65,10 @@ impl Demo {
                                 v.set_transcript_for(
                                     session,
                                     s.language.text("A thoughtful interface", "让界面更好用"),
-                                    s.language.text(" feels natural", "，自然顺手"),
+                                    s.language.text(" feels natural.", "，自然顺手。"),
                                     cx,
                                 );
-                                v.set_level_for(session, 0.45, 3, cx);
+                                v.set_level_for(session, 0.68, 4, cx);
                             });
                         }
                         DictationEvent::Finalize => {
@@ -76,8 +76,8 @@ impl Demo {
                                 return;
                             };
                             let text = s.language.text(
-                                "A thoughtful interface feels natural",
-                                "让界面更好用，自然顺手",
+                                "A thoughtful interface feels natural.",
+                                "让界面更好用，自然顺手。",
                             );
                             view.update(cx, |v, cx| {
                                 v.finish_recognition_for(session, text, cx);
@@ -268,16 +268,77 @@ impl Demo {
             }
             _ => unreachable!(),
         };
-        Self {
+        let initial_draft = if id == "dictation-button" {
+            t(
+                "Hi Priya — thanks for sending the notes.",
+                "你好 Priya，感谢发来纪要。",
+            )
+            .to_string()
+        } else {
+            String::new()
+        };
+        let mut demo = Self {
             example,
             language,
-            draft: String::new(),
+            draft: initial_draft,
             original_anchor: 0,
             dictation_session: None,
             dictation_blocked: false,
             speech_fail_next: false,
             _sub: sub,
+        };
+        if let Example::Dictation(control) = &demo.example {
+            let control = control.clone();
+            control.update(cx, |v, cx| {
+                v.start(cx);
+            });
+            control.update(cx, |v, _| {
+                v.settle_motion();
+            });
+            demo.dictation_session = control.read(cx).session_id();
+            demo.original_anchor = demo.draft.len();
+            if let Some(session) = demo.dictation_session {
+                control.update(cx, |v, cx| {
+                    v.set_phase_for(session, DictationPhase::Listening, cx);
+                    v.settle_motion();
+                    v.set_transcript_for(
+                        session,
+                        language.text("A thoughtful interface", "让界面更好用"),
+                        language.text(" feels natural.", "，自然顺手。"),
+                        cx,
+                    );
+                    v.set_level_for(session, 0.68, 4, cx);
+                });
+            }
+            let weak = control.downgrade();
+            cx.spawn(async move |_, cx| {
+                let mut tick = 0u64;
+                loop {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(250))
+                        .await;
+                    let alive = weak.update(cx, |v, cx| {
+                        let visible = cx
+                            .try_global::<crate::StoryBridge>()
+                            .is_none_or(|bridge| (bridge.visible)());
+                        if visible
+                            && v.phase() == DictationPhase::Listening
+                            && let Some(session) = v.session_id()
+                        {
+                            tick = tick.wrapping_add(1);
+                            let level = 0.42 + 0.36 * (tick as f32 * 0.65).sin().abs();
+                            let secs = 4 + (tick / 4) % 56;
+                            v.set_level_for(session, level, secs, cx);
+                        }
+                    });
+                    if alive.is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
         }
+        demo
     }
 }
 impl Render for Demo {
@@ -301,11 +362,23 @@ impl Render for Demo {
         if let Example::Dictation(control) = &self.example {
             let control = control.clone();
             let lang = self.language;
+            let listening = control.read(cx).phase() == DictationPhase::Listening;
             let move_label = lang.text("Move insertion position", "移动插入位置");
+            let shortcut_hint = if listening {
+                lang.text("Esc to cancel · ✓ to insert", "Esc 取消 · ✓ 插入")
+            } else {
+                lang.text("Click mic to dictate", "点击麦克风开始听写")
+            };
             let mic = div()
                 .flex()
                 .gap(px(4.))
+                .p(px(3.))
+                .rounded_full()
+                .bg(p.panel)
+                .border_1()
+                .border_color(p.line)
                 .children([false, true].map(|blocked| {
+                    let selected = self.dictation_blocked == blocked;
                     let label = if blocked {
                         lang.text("Mic blocked", "麦克风禁用")
                     } else {
@@ -314,17 +387,16 @@ impl Render for Demo {
                     face(
                         ("dictation-permission", usize::from(blocked)),
                         label,
-                        34.,
-                        kui::foundation::surface_radius(cx).into(),
-                        if self.dictation_blocked == blocked {
-                            Tone::Surface
-                        } else {
-                            Tone::Clear
-                        },
+                        30.,
+                        kui::foundation::Theme::global(cx).tokens.radius.full.into(),
+                        Tone::Clear,
                         cx,
                     )
-                    .px_3()
-                    .aria_toggled((self.dictation_blocked == blocked).into())
+                    .px(px(12.))
+                    .text_size(px(13.))
+                    .when(selected, |v| v.bg(p.tray).text_color(p.ink))
+                    .when(!selected, |v| v.text_color(p.secondary))
+                    .aria_toggled(selected.into())
                     .child(label)
                     .on_click(cx.listener(move |s, _, _, cx| {
                         s.dictation_blocked = blocked;
@@ -334,20 +406,61 @@ impl Render for Demo {
             return root
                 .child(
                     div()
-                        .w(px(490.))
+                        .w(px(540.))
                         .max_w_full()
-                        .p(px(12.))
+                        .p(px(16.))
                         .flex()
                         .flex_col()
-                        .gap(px(8.))
+                        .gap(px(12.))
                         .bg(p.panel)
                         .rounded(kui::foundation::surface_radius(cx))
                         .border_1()
                         .border_color(p.line)
                         .child(
                             div()
-                                .min_h(px(32.))
-                                .px(px(4.))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.))
+                                .pb(px(10.))
+                                .border_b_1()
+                                .border_color(p.line)
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .text_size(px(13.))
+                                        .child(
+                                            div()
+                                                .text_color(p.faint)
+                                                .child(lang.text("To", "收件人")),
+                                        )
+                                        .child(
+                                            div()
+                                                .px(px(8.))
+                                                .py(px(2.))
+                                                .rounded_full()
+                                                .bg(p.tray)
+                                                .text_size(px(12.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(p.ink)
+                                                .child("Priya Nair"),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.faint)
+                                        .child(shortcut_hint),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .min_h(px(44.))
+                                .px(px(2.))
+                                .text_size(px(14.))
+                                .line_height(px(21.))
                                 .text_color(if self.draft.is_empty() {
                                     p.secondary
                                 } else {
@@ -366,7 +479,10 @@ impl Render for Demo {
                                 .flex_wrap()
                                 .items_end()
                                 .justify_between()
-                                .gap(px(4.))
+                                .pt(px(8.))
+                                .border_t_1()
+                                .border_color(p.line)
+                                .gap(px(8.))
                                 .child(
                                     face(
                                         "move-caret",
@@ -379,6 +495,7 @@ impl Render for Demo {
                                     .px_2()
                                     .text_size(px(12.))
                                     .text_color(p.secondary)
+                                    .hover(|s| s.bg(p.tray).text_color(p.ink))
                                     .child(move_label)
                                     .on_click(cx.listener(
                                         move |_, _, _, cx| {
@@ -401,6 +518,7 @@ impl Render for Demo {
                                             cx,
                                         )
                                         .size(px(32.))
+                                        .hover(|s| s.bg(p.tray))
                                         .child(icon(Glyph::Close, 14., p.secondary))
                                         .on_click(
                                             cx.listener(|s, _, _, cx| {

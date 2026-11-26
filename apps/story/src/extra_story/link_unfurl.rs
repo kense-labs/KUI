@@ -53,12 +53,15 @@ impl Demo {
                 )
             })
             .collect();
+        let alfama_photo = Arc::new(Image::from_bytes(
+            ImageFormat::Jpeg,
+            include_bytes!("../../assets/places/alfama.jpg").to_vec(),
+        ));
         let composer = cx.new(|cx| {
             LinkUnfurl::new(lang.text("Message", "消息"), w, cx)
                 .with_samples(samples)
-                .with_collapsed_previews()
+                .with_preview_image(AIRBNB, alfama_photo)
         });
-        let fail_preview = Rc::new(Cell::new(true));
         let fail_send = Rc::new(Cell::new(true));
         cx.subscribe_in(
             &composer,
@@ -66,14 +69,13 @@ impl Demo {
             move |_, composer, event: &LinkUnfurlEvent, w, cx| match event {
                 LinkUnfurlEvent::Resolve { id, url } => {
                     let id = *id;
-                    let fail = url.as_ref() != AIRBNB && fail_preview.replace(false);
                     let (site, title, description) = match url.as_ref() {
                         AIRBNB => (
                             "Airbnb",
-                            lang.text("A quiet house for the team", "适合团队聚会的安静小屋"),
+                            lang.text("Rooftop loft in Alfama", "阿尔法玛屋顶公寓"),
                             lang.text(
-                                "A bright getaway with room for the whole team.",
-                                "明亮的度假小屋，可容纳整个团队。",
+                                "A quiet house for the team · 4 bedrooms in Lisbon",
+                                "适合团队聚会的安静小屋 · 里斯本四居室",
                             ),
                         ),
                         FIGMA => (
@@ -104,28 +106,15 @@ impl Demo {
                     let composer = composer.clone();
                     cx.spawn_in(w, async move |_, cx| {
                         cx.background_executor()
-                            .timer(Duration::from_millis(550))
+                            .timer(Duration::from_millis(320))
                             .await;
                         let _ = cx.update(|_, cx| {
                             composer.update(cx, |composer, cx| {
-                                if fail {
-                                    composer.resolve_preview(
-                                        id,
-                                        Err(lang
-                                            .text(
-                                                "Simulated preview failed; retry.",
-                                                "模拟预览失败，请重试。",
-                                            )
-                                            .into()),
-                                        cx,
-                                    );
-                                } else {
-                                    composer.resolve_preview(
-                                        id,
-                                        Ok(Some(LinkPreview::new(site, title, description))),
-                                        cx,
-                                    );
-                                }
+                                composer.resolve_preview(
+                                    id,
+                                    Ok(Some(LinkPreview::new(site, title, description))),
+                                    cx,
+                                );
                             });
                         });
                     })
@@ -170,7 +159,19 @@ impl Demo {
             .is_none_or(|bridge| (bridge.visible)());
         composer.update(cx, |s, cx| {
             s.set_visible(visible, cx);
-            s.set_text(format!("{}\n{AIRBNB}", examples[0].1), w, cx);
+            s.set_initial_draft(
+                format!("{}\n{AIRBNB}", examples[0].1),
+                LinkPreview::new(
+                    "Airbnb",
+                    lang.text("Rooftop loft in Alfama", "阿尔法玛屋顶公寓"),
+                    lang.text(
+                        "A quiet house for the team · 4 bedrooms in Lisbon",
+                        "适合团队聚会的安静小屋 · 里斯本四居室",
+                    ),
+                ),
+                w,
+                cx,
+            );
         });
         let weak = composer.downgrade();
         cx.spawn(async move |_, cx| {

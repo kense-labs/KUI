@@ -9,7 +9,7 @@ use crate::components::animated_counter::AnimatedCounter;
 use crate::components::color_math::oklab_mix;
 use crate::primitives::{
     family::{Paint, Slide, Tone, disabled_motion, face, measure},
-    presentation::{row, tr},
+    presentation::{column, row, tr},
 };
 
 /// One category of the whole. Categories without an explicit colour take the
@@ -42,6 +42,11 @@ pub struct WaffleInspect {
     pub value: f64,
     pub share: f64,
 }
+/// Emitted when the user selects a header tab.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WaffleTabChange {
+    pub index: usize,
+}
 struct Square {
     id: SharedString,
     x: Slide,
@@ -72,6 +77,10 @@ struct Square {
 /// ```
 pub struct WaffleChart {
     label: SharedString,
+    title: Option<SharedString>,
+    subtitle: Option<SharedString>,
+    tabs: Vec<SharedString>,
+    tab: usize,
     data: Vec<WaffleCategory>,
     hidden: Vec<SharedString>,
     cells: Vec<Square>,
@@ -90,10 +99,15 @@ pub struct WaffleChart {
     visible: bool,
 }
 impl EventEmitter<WaffleInspect> for WaffleChart {}
+impl EventEmitter<WaffleTabChange> for WaffleChart {}
 impl WaffleChart {
     pub fn new(label: impl Into<SharedString>, categories: Vec<WaffleCategory>) -> Self {
         Self {
             label: label.into(),
+            title: None,
+            subtitle: None,
+            tabs: vec![],
+            tab: 0,
             data: categories,
             hidden: vec![],
             cells: vec![],
@@ -108,6 +122,45 @@ impl WaffleChart {
             counters: vec![],
             initialized: false,
             visible: true,
+        }
+    }
+    /// Wrap the grid in a titled card with a supporting subtitle.
+    pub fn with_header(
+        mut self,
+        title: impl Into<SharedString>,
+        subtitle: impl Into<SharedString>,
+    ) -> Self {
+        self.title = Some(title.into());
+        self.subtitle = Some(subtitle.into());
+        self
+    }
+    /// Update the supporting subtitle under the card title.
+    pub fn set_subtitle(&mut self, subtitle: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let subtitle = subtitle.into();
+        if self.subtitle.as_ref() != Some(&subtitle) {
+            self.subtitle = Some(subtitle);
+            cx.notify();
+        }
+    }
+    /// Show compact segmented pill tabs in the card header.
+    pub fn with_tabs(mut self, tabs: Vec<SharedString>, active: usize) -> Self {
+        self.tab = active.min(tabs.len().saturating_sub(1));
+        self.tabs = tabs;
+        self
+    }
+    /// Select the active header tab without emitting an event.
+    pub fn set_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+        let next = index.min(self.tabs.len().saturating_sub(1));
+        if self.tab != next {
+            self.tab = next;
+            cx.notify();
+        }
+    }
+    fn select_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.tabs.len() && self.tab != index {
+            self.tab = index;
+            cx.emit(WaffleTabChange { index });
+            cx.notify();
         }
     }
     /// Word shown after raw values in the tooltip, such as "TWh".
@@ -672,6 +725,7 @@ impl Render for WaffleChart {
                         div()
                             .flex_1()
                             .min_w_0()
+                            .whitespace_nowrap()
                             .overflow_hidden()
                             .text_ellipsis()
                             .child(item.label.clone()),
@@ -700,9 +754,10 @@ impl Render for WaffleChart {
                     .into_any_element()
             })
             .collect();
-        row()
+        let body = row()
             .w_full()
             .max_w_full()
+            .flex_wrap()
             .items_center()
             .gap(px(24.))
             .text_color(p.ink)
@@ -711,7 +766,7 @@ impl Render for WaffleChart {
                 div()
                     .id("waffle-legend")
                     .flex_1()
-                    .min_w_0()
+                    .min_w(px(180.))
                     .flex()
                     .flex_col()
                     .gap(px(2.))
@@ -722,7 +777,114 @@ impl Render for WaffleChart {
                         }
                     }))
                     .children(legend),
+            );
+        if self.title.is_none() && self.tabs.is_empty() {
+            return body;
+        }
+        let dark = p.panel.l < 0.5;
+        let track_bg = if dark { p.tray } else { p.stage };
+        let active_border = if dark {
+            hsla(0., 0., 1., 0.10)
+        } else {
+            p.line.opacity(0.85)
+        };
+        column()
+            .w_full()
+            .max_w(px(640.))
+            .bg(p.panel)
+            .border_1()
+            .border_color(p.line)
+            .rounded(crate::foundation::surface_radius(cx))
+            .p(px(24.))
+            .gap(px(24.))
+            .text_color(p.ink)
+            .child(
+                row()
+                    .w_full()
+                    .flex_wrap()
+                    .items_start()
+                    .justify_between()
+                    .gap(px(12.))
+                    .when_some(self.title.clone(), |header, title| {
+                        header.child(
+                            column()
+                                .gap(px(2.))
+                                .child(
+                                    div()
+                                        .text_size(px(16.))
+                                        .line_height(px(22.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(p.ink)
+                                        .child(title),
+                                )
+                                .when_some(self.subtitle.clone(), |col, sub| {
+                                    col.child(
+                                        div()
+                                            .text_size(px(14.))
+                                            .line_height(px(20.))
+                                            .text_color(p.faint)
+                                            .child(sub),
+                                    )
+                                }),
+                        )
+                    })
+                    .when(!self.tabs.is_empty(), |header| {
+                        header.child(
+                            row()
+                                .id("waffle-tabs")
+                                .role(Role::TabList)
+                                .flex_none()
+                                .p(px(3.))
+                                .gap(px(2.))
+                                .bg(track_bg)
+                                .border_1()
+                                .border_color(p.line)
+                                .rounded_full()
+                                .children(self.tabs.iter().enumerate().map(|(i, label)| {
+                                    let selected = self.tab == i;
+                                    face(
+                                        ("waffle-tab", i),
+                                        label.clone(),
+                                        30.,
+                                        crate::foundation::Theme::global(cx)
+                                            .tokens
+                                            .radius
+                                            .full
+                                            .into(),
+                                        Tone::Clear,
+                                        cx,
+                                    )
+                                    .role(Role::Tab)
+                                    .flex_none()
+                                    .px(px(10.))
+                                    .whitespace_nowrap()
+                                    .when(selected, |v| {
+                                        v.bg(p.panel)
+                                            .border_1()
+                                            .border_color(active_border)
+                                            .shadow_xs()
+                                    })
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(if selected { p.ink } else { p.secondary })
+                                    .hover(|s| s.text_color(p.ink))
+                                    .aria_selected(selected)
+                                    .child(div().whitespace_nowrap().child(label.clone()))
+                                    .on_click(cx.listener(move |s, _, _, cx| s.select_tab(i, cx)))
+                                    .on_key_down(cx.listener(move |s, e: &KeyDownEvent, w, cx| {
+                                        if matches!(e.keystroke.key.as_str(), "enter" | "space")
+                                            && !e.is_held
+                                        {
+                                            s.select_tab(i, cx);
+                                            w.prevent_default();
+                                            cx.stop_propagation();
+                                        }
+                                    }))
+                                })),
+                        )
+                    }),
             )
+            .child(body)
     }
 }
 

@@ -125,6 +125,26 @@ fn smooth_at(values: &[f32], t: f32) -> f32 {
         + (-2. * u3 + 3. * u2) * values[i + 1]
         + (u3 - u2) * tangent(i + 1)
 }
+fn format_grouped(value: f32) -> String {
+    let rounded = if value.is_finite() {
+        value.round() as i64
+    } else {
+        0
+    };
+    let sign = if rounded < 0 { "-" } else { "" };
+    let digits = rounded.unsigned_abs().to_string();
+    let bytes = digits.as_bytes();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    out.push_str(sign);
+    for (i, &b) in bytes.iter().enumerate() {
+        if i > 0 && (bytes.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(b as char);
+    }
+    out
+}
+
 pub struct Plot {
     kind: PlotKind,
     title: SharedString,
@@ -141,6 +161,8 @@ pub struct Plot {
     bars: Vec<BarSlot>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     pub header: Option<AnyView>,
+    pub delta: Option<f32>,
+    pub comparison_note: Option<SharedString>,
     show_comparison: bool,
     segments: Vec<(SharedString, Slide)>,
     curve: Vec<(Slide, Option<Slide>)>,
@@ -171,6 +193,8 @@ impl Plot {
             clock: Default::default(),
             bounds: Default::default(),
             header: None,
+            delta: None,
+            comparison_note: None,
             show_comparison: true,
             segments: vec![],
             curve: vec![],
@@ -606,10 +630,24 @@ impl Plot {
             PlotKind::Spark => self
                 .data
                 .last()
-                .map(|v| format!("{:.0}", v.value))
+                .map(|v| format_grouped(v.value))
                 .unwrap_or_default(),
-            PlotKind::Calendar { .. } => format!("{sum:.0}"),
+            PlotKind::Calendar { .. } => format_grouped(sum),
             _ => String::new(),
+        };
+        let spark_delta = self.delta.filter(|_| kind == PlotKind::Spark);
+        let delta_pill = |pct: f32| {
+            let tone = if pct >= 0. { p.success } else { p.danger };
+            div()
+                .px(px(7.))
+                .py(px(2.))
+                .rounded_full()
+                .bg(tone.opacity(0.12))
+                .text_color(tone)
+                .text_size(px(12.))
+                .line_height(px(16.))
+                .font_weight(FontWeight::MEDIUM)
+                .child(format!("{}{pct:.1}%", if pct >= 0. { "+" } else { "" }))
         };
         el = el.child(
             row()
@@ -624,7 +662,14 @@ impl Plot {
                         }),
                 )
                 .when_some(self.header.clone(), |c, h| c.child(h))
-                .when(self.header.is_none(), |c| c.child(title(summary, p))),
+                .when(self.header.is_none() && !summary.is_empty(), |c| {
+                    c.child(
+                        row()
+                            .gap(px(8.))
+                            .child(title(summary, p))
+                            .when_some(spark_delta, |r, pct| r.child(delta_pill(pct))),
+                    )
+                }),
         );
         match kind {
             PlotKind::Line | PlotKind::Bar => {
@@ -633,11 +678,36 @@ impl Plot {
                 } else {
                     (tr(cx, "Daily average", "日均"), mean)
                 };
-                el = el.child(
-                    column()
-                        .child(hint(label, p))
-                        .child(div().text_size(px(27.)).child(format!("{number:.0}"))),
-                )
+                let line_delta = if kind == PlotKind::Line {
+                    let cur: f32 = self.data.iter().map(|s| s.value).sum();
+                    let prev: f32 = self.data.iter().filter_map(|s| s.comparison).sum();
+                    (prev > 0.).then_some((cur - prev) / prev * 100.)
+                } else {
+                    None
+                };
+                el =
+                    el.child(
+                        column().gap(px(2.)).child(hint(label, p)).child(
+                            row()
+                                .items_baseline()
+                                .flex_wrap()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(27.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(format_grouped(number)),
+                                )
+                                .when_some(line_delta, |r, pct| {
+                                    r.child(
+                                        row().gap(px(6.)).child(delta_pill(pct)).when_some(
+                                            self.comparison_note.clone(),
+                                            |row, note| row.child(hint(note, p)),
+                                        ),
+                                    )
+                                }),
+                        ),
+                    )
             }
             PlotKind::Calendar { .. } if self.data.len() >= 365 => {
                 el = el.child(row().justify_between().children(
@@ -711,10 +781,7 @@ impl Plot {
                                 .child(self.readout.render(12., w, cx)),
                         )
                         .child(title(
-                            format!(
-                                "{:.0}",
-                                active.and_then(|i| values.get(i)).map_or(sum, |s| s.0)
-                            ),
+                            format_grouped(active.and_then(|i| values.get(i)).map_or(sum, |s| s.0)),
                             p,
                         )),
                 ),
@@ -739,8 +806,7 @@ impl Plot {
                         .child(div().flex_1().min_w_0().child(graph))
                         .child(column().h(px(height)).justify_between().children(
                             (0..4).rev().map(|i| {
-                                hint(format!("{:.0}", axis_max * i as f32 / 3.), p)
-                                    .text_size(px(10.))
+                                hint(format_grouped(axis_max * i as f32 / 3.), p).text_size(px(10.))
                             }),
                         )),
                 );
@@ -753,7 +819,8 @@ impl Plot {
                     .gap_0()
                     .children(self.data.iter().enumerate().map(|(i, s)| {
                         let pct = 100. * values[i].0 / sum.max(f32::EPSILON);
-                        let text = format!("{}  {:.0}  {:.0}%", s.label, s.value, pct);
+                        let grouped = format_grouped(s.value);
+                        let text = format!("{}  {grouped}  {pct:.0}%", s.label);
                         crate::primitives::family::face(
                             ("slice", i),
                             text,
@@ -768,7 +835,7 @@ impl Plot {
                         }))
                         .child(dot(6., rgb(SERIES[i % SERIES.len()]).into()))
                         .child(div().flex_1().child(s.label.clone()))
-                        .child(hint(format!("{:.0}", s.value), p))
+                        .child(hint(grouped, p))
                         .child(hint(format!("{pct:.0}%"), p).w(px(33.)).text_right())
                         .opacity(if self.hidden.contains(&s.label) {
                             0.5
@@ -812,12 +879,12 @@ impl Plot {
             el = el.child(
                 hint(
                     format!(
-                        "{}   {:.0}{}",
+                        "{}   {}{}",
                         s.label,
-                        s.value,
+                        format_grouped(s.value),
                         s.comparison
                             .filter(|_| cmp)
-                            .map_or(String::new(), |x| format!("  /  {x:.0}"))
+                            .map_or(String::new(), |x| format!("  /  {}", format_grouped(x)))
                     ),
                     p,
                 )

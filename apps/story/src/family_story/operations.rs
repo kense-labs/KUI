@@ -53,6 +53,7 @@ impl Render for Demo {
             })
             .children(self.options.iter().enumerate().map(|(i, (label, action))| {
                 let f = action.clone();
+                let single_action = self.options.len() == 1 && !self.segmented;
                 btn(("scenario", i), *label, false, cx, move |s, w, cx| {
                     s.selected = i;
                     f(w, cx);
@@ -61,9 +62,10 @@ impl Render for Demo {
                 .when(self.reasoning_stage, |el| {
                     el.h(px(36.)).px(px(12.)).text_size(px(14.))
                 })
-                .when(self.segmented && self.selected == i, |el| {
-                    el.bg(p.panel).border_1().border_color(p.line)
-                })
+                .when(
+                    (self.segmented && self.selected == i) || single_action,
+                    |el| el.bg(p.panel).border_1().border_color(p.line),
+                )
             }));
         let view = column()
             .w_full()

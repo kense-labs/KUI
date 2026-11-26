@@ -1356,8 +1356,16 @@ impl AnalyticsScreen {
             );
         }
 
+        let main_w = self.measured_width.get();
+        let bd_skel_w = if main_w >= 840. {
+            340.
+        } else if main_w >= 640. {
+            286.
+        } else {
+            258.
+        };
         let breakdown_skel = div()
-            .when(!stack_main, |d| d.w(px(340.)).flex_none())
+            .when(!stack_main, |d| d.w(px(bd_skel_w)).flex_none())
             .when(stack_main, |d| d.w_full())
             .p(px(16.))
             .pt(px(14.))
@@ -2018,23 +2026,23 @@ impl AnalyticsScreen {
                 bd_list = bd_list.child(
                     div()
                         .h(px(38.))
-                        .px(px(8.))
+                        .px(px(6.))
                         .rounded(px(8.))
                         .when(idx % 2 == 1, |d| d.bg(p.hover))
                         .flex()
                         .items_center()
                         .justify_between()
-                        .gap(px(10.))
+                        .gap(px(8.))
                         .text_size(px(13.))
                         .child(
                             div()
                                 .flex_1()
                                 .min_w_0()
-                                .truncate()
+                                .whitespace_nowrap()
                                 .text_color(p.muted)
                                 .child(item.label.clone()),
                         )
-                        .child(div().w(px(40.)).flex_none().child(pro_spring_bar(
+                        .child(div().w(px(30.)).flex_none().child(pro_spring_bar(
                             pro_eid(&self.id, format!("bd-bar-{idx}")),
                             bd_frac,
                             4.,
@@ -2053,10 +2061,15 @@ impl AnalyticsScreen {
                 );
             }
 
+            let bd_card_w = if main_w >= 840. {
+                340.
+            } else if main_w >= 640. {
+                286.
+            } else {
+                258.
+            };
             let breakdown_card = div()
-                .when(!stack_main, |d| {
-                    d.w(px(if main_w < 840. { 258. } else { 340. })).flex_none()
-                })
+                .when(!stack_main, |d| d.w(px(bd_card_w)).flex_none())
                 .when(stack_main, |d| d.w_full())
                 .p(px(if compact_kpi { 14. } else { 16. }))
                 .pt(px(14.))

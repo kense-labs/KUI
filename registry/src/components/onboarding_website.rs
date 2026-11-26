@@ -337,7 +337,7 @@ impl OnboardingWebsiteScreen {
             invalid_ink: Rc::new(Cell::new(None)),
             domain_editor: None,
             editor_focused: false,
-            measured_width: Rc::new(Cell::new(1280.)),
+            measured_width: Rc::new(Cell::new(894.)),
             started_at: Instant::now(),
             last_domain_anim: None,
         }
@@ -1764,11 +1764,12 @@ impl OnboardingWebsiteScreen {
             .child(side_col)
             .child(body_col);
 
+        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
         div()
             .absolute()
             .top(px(56.))
             .bottom_0()
-            .left_1_2()
+            .left(px((container_w * split_ratio).round()))
             .w(px(1088.))
             .pt(px(24.))
             .pl(px(8.))
@@ -1803,7 +1804,14 @@ impl OnboardingWebsiteScreen {
             )
     }
 
-    fn render_loading_skeleton(&self, narrow: bool, w: &mut Window, cx: &App) -> Div {
+    fn render_loading_skeleton(
+        &self,
+        narrow: bool,
+        split_ratio: f32,
+        left_pad: f32,
+        w: &mut Window,
+        cx: &App,
+    ) -> Div {
         let phase = if Theme::global(cx).reduced_motion {
             0.25
         } else {
@@ -1815,7 +1823,7 @@ impl OnboardingWebsiteScreen {
             .flex_1()
             .min_h_0()
             .when(narrow, |d| d.w_full().px(px(20.)))
-            .when(!narrow, |d| d.w_1_2().px(px(40.)))
+            .when(!narrow, |d| d.w(relative(split_ratio)).px(px(left_pad)))
             .py(px(24.))
             .flex()
             .items_center()
@@ -1860,7 +1868,9 @@ impl Render for OnboardingWebsiteScreen {
 
         let measure_cell = self.measured_width.clone();
         let container_w = measure_cell.get();
-        let narrow = container_w <= 900.;
+        let narrow = container_w < 740.;
+        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let left_pad = if container_w < 980. { 24. } else { 40. };
 
         // Top 56px bar: clean geometric product mark + product name, optional Back, account + Log out
         let top_bar = div()
@@ -2013,13 +2023,13 @@ impl Render for OnboardingWebsiteScreen {
 
         // Left-column step body
         let left_main = if self.loading {
-            self.render_loading_skeleton(narrow, w, cx)
+            self.render_loading_skeleton(narrow, split_ratio, left_pad, w, cx)
         } else if self.empty {
             div()
                 .flex_1()
                 .min_h_0()
                 .when(narrow, |d| d.w_full().px(px(20.)))
-                .when(!narrow, |d| d.w_1_2().px(px(40.)))
+                .when(!narrow, |d| d.w(relative(split_ratio)).px(px(left_pad)))
                 .py(px(24.))
                 .flex()
                 .items_center()
@@ -2478,7 +2488,7 @@ impl Render for OnboardingWebsiteScreen {
                 .flex_1()
                 .min_h_0()
                 .when(narrow, |d| d.w_full().px(px(20.)))
-                .when(!narrow, |d| d.w_1_2().px(px(40.)))
+                .when(!narrow, |d| d.w(relative(split_ratio)).px(px(left_pad)))
                 .py(px(24.))
                 .flex()
                 .items_center()

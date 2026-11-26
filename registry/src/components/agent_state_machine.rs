@@ -252,7 +252,7 @@ pub struct AgentStateMachine {
 }
 
 impl AgentStateMachine {
-    /// Create a live [`AgentStateMachine`] for `"Atlas"` (`Claude Opus 5.5`) across 6 canonical states.
+    /// Create a live [`AgentStateMachine`] for `"Atlas"` (`Claude Opus 5.5`) across 10 canonical states.
     pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
         cx.observe_global::<crate::foundation::Theme>(|_, cx| cx.notify())
             .detach();
@@ -267,7 +267,7 @@ impl AgentStateMachine {
             agent_model: "Claude Opus 5.5".into(),
             states,
             transitions,
-            current: "coding".into(),
+            current: "reading-results".into(),
             custom_data: false,
             entered_current_at: now,
             hovered_state_id: None,
@@ -275,7 +275,7 @@ impl AgentStateMachine {
             inspect: None,
             last_inspect: None,
             active_pulse: Some(ActiveTxPulse {
-                tx_id: "t-search-code".into(),
+                tx_id: "t-call-read".into(),
                 started: now,
                 duration: 0.85,
             }),
@@ -284,7 +284,7 @@ impl AgentStateMachine {
             loading: false,
             empty: false,
             boot: now,
-            measured_width: Rc::new(Cell::new(780.0)),
+            measured_width: Rc::new(Cell::new(806.0)),
         }
     }
 
@@ -396,17 +396,23 @@ impl AgentStateMachine {
         cx.notify();
     }
 
-    /// Step the state machine along its next demonstration transition (including self-retry, backward loop, Waiting, and Done).
+    /// Step the state machine along its next demonstration transition (including self-retry, branches, Waiting, Error recovery, and Done).
     pub fn step_demo_transition(&mut self, cx: &mut Context<Self>) {
         let script = [
-            "t-code-wait",
-            "t-wait-test",
-            "t-test-code",
-            "t-code-test",
+            "t-read-test",
+            "t-test-fix",
+            "t-fix-test",
             "t-test-done",
-            "t-plan-search",
-            "t-search-retry",
-            "t-search-code",
+            "t-plan-recall",
+            "t-recall-delegate",
+            "t-delegate-test",
+            "t-plan-call",
+            "t-call-retry",
+            "t-call-wait",
+            "t-wait-test",
+            "t-call-read",
+            "t-read-write",
+            "t-write-done",
         ];
         if self.current.as_ref() == "done" && !self.custom_data {
             let (states, transitions) = default_state_machine();
@@ -414,7 +420,7 @@ impl AgentStateMachine {
             self.transitions = transitions;
             self.current = "planning".into();
             self.entered_current_at = Instant::now();
-            self.demo_step = 5;
+            self.demo_step = 4;
             cx.notify();
             return;
         }
@@ -987,20 +993,29 @@ impl Render for AgentStateMachine {
         let max_row = self.states.iter().map(|s| s.row).max().unwrap_or(0);
 
         // Responsive card & gap geometry so everything fits inside inner_w without horizontal scrolling!
-        let start_lead = if inner_w < 560.0 { 22.0 } else { 36.0 };
-        let usable_w = (inner_w - start_lead - 8.0).max(240.0);
+        let start_lead = if inner_w < 560.0 { 20.0 } else { 30.0 };
+        let usable_w = (inner_w - start_lead - 6.0).max(240.0);
         let cols_f = (max_col + 1) as f32;
-        let min_gap = if inner_w < 560.0 { 16.0 } else { 32.0 };
-        let card_w = ((usable_w - min_gap * (cols_f - 1.0)) / cols_f).clamp(88.0, 144.0);
+        let min_gap = if inner_w < 560.0 { 14.0 } else { 28.0 };
+        let card_w = ((usable_w - min_gap * (cols_f - 1.0)) / cols_f).clamp(88.0, 158.0);
         let col_gap = if max_col > 0 {
-            ((usable_w - card_w * cols_f) / (max_col as f32)).clamp(12.0, 48.0)
+            ((usable_w - card_w * cols_f) / (max_col as f32)).clamp(12.0, 44.0)
         } else {
             24.0
         };
-        let card_h = 60.0_f32;
-        let top_loop_room = 56.0_f32;
-        let row_pitch = 112.0_f32;
-        let bottom_loop_room = 54.0_f32;
+        let card_h = 56.0_f32;
+        let top_loop_room = 40.0_f32;
+        let row_pitch = 96.0_f32;
+        let has_spine_under = self.transitions.iter().any(|tx| {
+            let (Some(r0), Some(r1)) = (
+                self.states.iter().find(|s| s.id == tx.from),
+                self.states.iter().find(|s| s.id == tx.to),
+            ) else {
+                return false;
+            };
+            r0.row == r1.row && r1.col < r0.col
+        });
+        let bottom_loop_room = if has_spine_under { 48.0 } else { 14.0 };
         let stage_h = top_loop_room + (max_row as f32) * row_pitch + card_h + bottom_loop_room;
 
         let mut state_rects: HashMap<SharedString, (f32, f32, f32, f32)> =
@@ -1780,25 +1795,40 @@ fn compute_transition_geometry(
 
     // 4) Downward vertical or elbow transition (`y1 > y0`)
     if y1 > y0 {
-        let sx = x0 + w0 * 0.5;
         let sy = y0 + h0;
         if (x0 - x1).abs() < 2.0 {
+            // Offset slightly left on lower rows so opposing vertical return lanes never collide
+            let lane_frac = if y0 > 80.0 { 0.36 } else { 0.52 };
+            let sx = x0 + w0 * lane_frac;
             let ey = y1 - 2.0;
             let pts = vec![(sx, sy), (sx, (sy + ey) * 0.5), (sx, ey)];
             return (pts, (0.0, 1.0), (sx, (sy + ey) * 0.5));
         }
+        let sx = x0 + w0 * 0.5;
         let ey = y1 + h1 * 0.5;
-        let ex = x1 - 2.0;
-        let pts = vec![(sx, sy), (sx, ey - 5.0), (sx + 5.0, ey), (ex, ey)];
-        return (pts, (1.0, 0.0), (sx, (sy + ey) * 0.5));
+        if x1 > x0 {
+            let ex = x1 - 2.0;
+            let pts = vec![(sx, sy), (sx, ey - 6.0), (sx + 6.0, ey), (ex, ey)];
+            return (pts, (1.0, 0.0), ((sx + ex) * 0.5, ey));
+        }
+        let ex = x1 + w1 + 2.0;
+        let pts = vec![(sx, sy), (sx, ey - 6.0), (sx - 6.0, ey), (ex, ey)];
+        return (pts, (-1.0, 0.0), ((sx + ex) * 0.5, ey));
     }
 
     // 5) Upward return transition from lower row (`y1 < y0`)
+    if (x0 - x1).abs() < 2.0 {
+        let sx = x0 + w0 * 0.68;
+        let sy = y0;
+        let ey = y1 + h1 + 2.0;
+        let pts = vec![(sx, sy), (sx, (sy + ey) * 0.5), (sx, ey)];
+        return (pts, (0.0, -1.0), (sx, (sy + ey) * 0.5));
+    }
     let sx = x0 + w0;
     let sy = y0 + h0 * 0.5;
-    let ex = x1 + w1 * 0.5;
+    let ex = x1 + w1 * 0.28;
     let ey = y1 + h1 + 2.0;
-    let pts = vec![(sx, sy), (ex - 5.0, sy), (ex, sy - 5.0), (ex, ey)];
+    let pts = vec![(sx, sy), (ex - 6.0, sy), (ex, sy - 6.0), (ex, ey)];
     (pts, (0.0, -1.0), ((sx + ex) * 0.5, sy))
 }
 
@@ -1947,83 +1977,179 @@ fn infer_provider_key(model: &str) -> &'static str {
 fn tr_sm_state<'a>(id: &str, fallback: &'a str, cx: &App) -> &'a str {
     match id {
         "planning" => tr(cx, "Planning", "任务规划"),
+        "calling-tool" => tr(cx, "Calling tool", "调用工具"),
+        "reading-results" => tr(cx, "Reading results", "读取结果"),
+        "writing-answer" => tr(cx, "Writing answer", "撰写回答"),
+        "recalling" => tr(cx, "Recalling memory", "检索记忆"),
+        "waiting" => tr(cx, "Waiting for you", "等待确认"),
+        "testing" => tr(cx, "Running tests", "执行测试"),
+        "done" => tr(cx, "Done", "已完成"),
+        "delegating" => tr(cx, "Delegating", "委派子智能体"),
+        "fixing-error" => tr(cx, "Fixing error", "修复异常"),
         "searching" => tr(cx, "Searching", "检索上下文"),
         "coding" => tr(cx, "Coding", "编写补丁"),
-        "testing" => tr(cx, "Testing", "执行测试"),
-        "waiting" => tr(cx, "Waiting", "等待确认"),
-        "done" => tr(cx, "Done", "已完成"),
         _ => fallback,
     }
 }
 
 fn default_state_machine() -> (Vec<MachineState>, Vec<MachineTransition>) {
     let states = vec![
+        // Row 0: Primary reasoning & tool spine
         MachineState::new("planning", "Planning", 0, 0)
             .with_color(rgb(0x8b5cf6).into())
             .with_tools(["Linear"])
             .with_metrics(4_200, 2)
             .with_description(
-                "Decomposes the issue prompt into file targets and verification steps.",
+                "Decomposes the prompt into concrete tool queries, memory lookups, and verification steps.",
             ),
-        MachineState::new("searching", "Searching", 1, 0)
+        MachineState::new("calling-tool", "Calling tool", 1, 0)
             .with_color(rgb(0x0ea5e9).into())
             .with_tools(["GitHub", "Notion"])
-            .with_metrics(9_100, 3)
+            .with_metrics(6_400, 3)
             .with_description(
-                "Queries repository symbols, recent commits, and workspace architecture docs.",
+                "Executes typed MCP and repository calls with automatic backoff on rate limits.",
             ),
-        MachineState::new("coding", "Coding", 2, 0)
+        MachineState::new("reading-results", "Reading results", 2, 0)
             .with_color(rgb(0x3b82f6).into())
             .with_tools(["GitHub"])
-            .with_metrics(14_500, 2)
+            .with_metrics(5_100, 3)
             .with_description(
-                "Edits TypeScript/Rust source modules and prepares incremental patches.",
+                "Parses structured tool payloads, diffs candidate edits, and checks citations.",
             ),
-        MachineState::new("testing", "Testing", 3, 0)
-            .with_color(rgb(0x14b8a6).into())
-            .with_tools(["GitHub"])
-            .with_metrics(7_800, 1)
+        MachineState::new("writing-answer", "Writing answer", 3, 0)
+            .with_color(rgb(0x6366f1).into())
+            .with_metrics(8_900, 1)
             .with_description(
-                "Runs unit, integration, and type-check suites against the candidate patch.",
+                "Synthesizes the final grounded response with inline diff summaries and next steps.",
             ),
-        MachineState::new("waiting", "Waiting", 2, 1)
+        // Row 1: Memory, human approval gate, verification, and terminal state
+        MachineState::new("recalling", "Recalling memory", 0, 1)
+            .with_color(rgb(0x06b6d4).into())
+            .with_tools(["Notion"])
+            .with_metrics(1_800, 1)
+            .with_description(
+                "Retrieves workspace conventions, prior incident notes, and user preferences.",
+            ),
+        MachineState::new("waiting", "Waiting for you", 1, 1)
             .with_kind(MachineStateKind::Waiting)
             .with_tools(["Slack"])
             .with_metrics(0, 0)
             .with_description(
-                "Pauses before schema migrations or external pushes so a human can approve.",
+                "Pauses before destructive schema migrations or external pushes so a human can approve.",
             ),
-        MachineState::new("done", "Done", 4, 0)
+        MachineState::new("testing", "Running tests", 2, 1)
+            .with_color(rgb(0x14b8a6).into())
+            .with_tools(["GitHub"])
+            .with_metrics(7_800, 2)
+            .with_description(
+                "Runs unit, integration, and type-check suites against the candidate patch.",
+            ),
+        MachineState::new("done", "Done", 3, 1)
             .with_kind(MachineStateKind::Final)
             .with_metrics(0, 0)
-            .with_description("All checks passed and final summary delivered to the thread."),
+            .with_description("All checks passed and final answer delivered to the thread."),
+        // Row 2: Sub-agent delegation & automated error recovery
+        MachineState::new("delegating", "Delegating", 1, 2)
+            .with_color(rgb(0xa855f7).into())
+            .with_tools(["Linear", "GitHub"])
+            .with_metrics(5_400, 1)
+            .with_description(
+                "Spawns a specialist sub-agent for isolated benchmark or migration verification.",
+            ),
+        MachineState::new("fixing-error", "Fixing error", 2, 2)
+            .with_kind(MachineStateKind::Error)
+            .with_tools(["GitHub"])
+            .with_metrics(3_200, 1)
+            .with_description(
+                "Inspects failing assertion tracebacks and patches edge-case regressions before re-testing.",
+            ),
     ];
 
     let transitions = vec![
-        MachineTransition::new("t-plan-search", "planning", "searching", "needs context", 2)
-            .with_detail("Agent moves from plan synthesis to repository search."),
+        MachineTransition::new("t-plan-call", "planning", "calling-tool", "invoke tool", 2)
+            .with_detail("Moves from plan synthesis into external tool execution."),
+        MachineTransition::new("t-plan-recall", "planning", "recalling", "check memory", 1)
+            .with_detail("Looks up prior workspace rules before issuing external queries."),
         MachineTransition::new(
-            "t-search-retry",
-            "searching",
-            "searching",
+            "t-recall-call",
+            "recalling",
+            "calling-tool",
+            "context loaded",
+            1,
+        )
+        .with_detail("Applies recalled workspace constraints to tool parameters."),
+        MachineTransition::new(
+            "t-recall-delegate",
+            "recalling",
+            "delegating",
+            "parallelize",
+            1,
+        )
+        .with_detail("Hands off isolated verification scope to a specialist sub-agent."),
+        MachineTransition::new(
+            "t-call-retry",
+            "calling-tool",
+            "calling-tool",
             "timeout, retry",
             1,
         )
-        .with_detail("Retries transient rate-limited code search query with backoff."),
-        MachineTransition::new("t-search-plan", "searching", "planning", "scope changed", 1)
-            .with_detail("Discovered extra affected module; loops back underneath to revise plan."),
-        MachineTransition::new("t-search-code", "searching", "coding", "found files", 2)
-            .with_detail("Sufficient context gathered; begins authoring patch."),
-        MachineTransition::new("t-code-test", "coding", "testing", "patch ready", 1)
-            .with_detail("Candidate edit compiled; triggers automated test runner."),
-        MachineTransition::new("t-test-code", "testing", "coding", "test failed", 1)
-            .with_detail("Assertion mismatch in edge case; loops back underneath to refine patch."),
-        MachineTransition::new("t-code-wait", "coding", "waiting", "needs approval", 0)
-            .with_detail("Migration touches production config; requests operator sign-off."),
+        .with_detail("Retries transient 429/504 tool response with exponential backoff."),
+        MachineTransition::new(
+            "t-call-wait",
+            "calling-tool",
+            "waiting",
+            "needs approval",
+            0,
+        )
+        .with_detail("Production write detected; pauses for explicit human sign-off."),
+        MachineTransition::new(
+            "t-call-read",
+            "calling-tool",
+            "reading-results",
+            "payload ready",
+            3,
+        )
+        .with_detail("Streams structured tool output into the context window."),
+        MachineTransition::new(
+            "t-read-write",
+            "reading-results",
+            "writing-answer",
+            "ready to reply",
+            1,
+        )
+        .with_detail("Context is complete; begins drafting the grounded final answer."),
+        MachineTransition::new(
+            "t-read-test",
+            "reading-results",
+            "testing",
+            "verify patch",
+            1,
+        )
+        .with_detail("Triggers automated test suite on candidate code changes."),
         MachineTransition::new("t-wait-test", "waiting", "testing", "approved", 0)
-            .with_detail("Operator approved migration; proceeds directly into verification."),
+            .with_detail("Operator approved gated action; proceeds into verification."),
+        MachineTransition::new(
+            "t-delegate-test",
+            "delegating",
+            "testing",
+            "sub-agent done",
+            1,
+        )
+        .with_detail("Specialist sub-agent returned patch; runs full test suite."),
+        MachineTransition::new(
+            "t-test-fix",
+            "testing",
+            "fixing-error",
+            "assertion failed",
+            1,
+        )
+        .with_detail("Edge-case test failed; enters targeted repair branch."),
+        MachineTransition::new("t-fix-test", "fixing-error", "testing", "re-run suite", 1)
+            .with_detail("Applies fix and re-runs affected test targets."),
         MachineTransition::new("t-test-done", "testing", "done", "all green", 0)
             .with_detail("Every suite passed with zero warnings; completes run."),
+        MachineTransition::new("t-write-done", "writing-answer", "done", "delivered", 0)
+            .with_detail("Final answer streamed and persisted to conversation."),
     ];
 
     (states, transitions)
@@ -2037,7 +2163,7 @@ mod tests {
     use gpui::TestAppContext;
 
     #[test]
-    fn default_state_machine_starts_in_coding_with_seven_recorded_transitions() {
+    fn default_state_machine_starts_with_ten_states_across_three_rows() {
         assert_eq!(format_count(1_284), "1,284");
         assert_eq!(format_count(12_500), "12K");
         assert_eq!(format_dwell_ms(65_000), "1m 05s");
@@ -2046,8 +2172,10 @@ mod tests {
         app.update(crate::init);
         let sm = app.new(|cx| AgentStateMachine::new("sm-test", cx));
         sm.read_with(&app, |m, _| {
-            assert_eq!(m.current_state_id().as_ref(), "coding");
-            assert_eq!(m.total_transitions(), 8);
+            assert_eq!(m.states.len(), 10);
+            assert_eq!(m.states.iter().map(|s| s.row).max(), Some(2));
+            assert_eq!(m.current_state_id().as_ref(), "reading-results");
+            assert_eq!(m.total_transitions(), 14);
         });
     }
 
@@ -2057,13 +2185,13 @@ mod tests {
         app.update(crate::init);
         let sm = app.new(|cx| AgentStateMachine::new("sm-step", cx));
         sm.update(&mut app, |m, cx| {
-            m.fire_transition("t-code-wait", cx);
+            m.fire_transition("t-call-wait", cx);
             assert_eq!(m.current_state_id().as_ref(), "waiting");
-            assert_eq!(m.total_transitions(), 9);
+            assert_eq!(m.total_transitions(), 15);
 
             m.resolve_waiting_state(true, cx);
             assert_eq!(m.current_state_id().as_ref(), "testing");
-            assert_eq!(m.total_transitions(), 10);
+            assert_eq!(m.total_transitions(), 16);
 
             m.fire_transition("t-test-done", cx);
             assert_eq!(m.current_state_id().as_ref(), "done");

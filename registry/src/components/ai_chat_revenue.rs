@@ -1027,12 +1027,12 @@ impl AiChatRevenueScreen {
         let rva_blue: Hsla = if p.dark {
             rgb(0x4fb0fe).into()
         } else {
-            rgb(0x0190fe).into()
+            rgb(0x0077ed).into()
         };
         let rva_good: Hsla = if p.dark {
             rgb(0x7dcf9f).into()
         } else {
-            rgb(0x1e7a47).into()
+            rgb(0x167943).into()
         };
         let rva_bad: Hsla = if p.dark {
             rgb(0xff8a7a).into()
@@ -1040,9 +1040,9 @@ impl AiChatRevenueScreen {
             rgb(0xd72400).into()
         };
         let rva_edge: Hsla = if p.dark {
-            hsla(0., 0., 1., 0.09)
+            hsla(0., 0., 1., 0.11)
         } else {
-            hsla(0., 0., 0., 0.09)
+            hsla(0., 0., 0., 0.10)
         };
 
         match turn {
@@ -1729,20 +1729,21 @@ impl AiChatRevenueScreen {
         };
 
         let prev_stroke = if p.dark {
-            hsla(0., 0., 1., 0.36)
+            hsla(0., 0., 1., 0.42)
         } else {
-            hsla(0., 0., 0., 0.30)
+            hsla(240. / 360., 0.05, 0.22, 0.42)
         };
         let grid_stroke = if p.dark {
-            hsla(0., 0., 1., 0.08)
+            hsla(0., 0., 1., 0.095)
         } else {
-            hsla(0., 0., 0., 0.06)
+            hsla(0., 0., 0., 0.08)
         };
         let guide_stroke = if p.dark {
-            hsla(0., 0., 1., 0.20)
+            hsla(0., 0., 1., 0.24)
         } else {
-            hsla(0., 0., 0., 0.13)
+            hsla(0., 0., 0., 0.18)
         };
+        let area_top_alpha = if p.dark { 0.24 } else { 0.16 };
         let card_bg = p.card;
 
         let min_y = y_bot as f32;
@@ -1916,14 +1917,14 @@ impl AiChatRevenueScreen {
                         path,
                         linear_gradient(
                             180.,
-                            linear_color_stop(rva_blue.opacity(0.20), 0.),
+                            linear_color_stop(rva_blue.opacity(area_top_alpha), 0.),
                             linear_color_stop(rva_blue.opacity(0.0), 1.),
                         ),
                     );
                 }
 
                 // Solid current-year curve
-                let mut line = PathBuilder::stroke(px(1.65));
+                let mut line = PathBuilder::stroke(px(1.85));
                 for (i, &ny) in cur_norm.iter().enumerate().take(vis_n) {
                     let pt = pt_at(i, ny);
                     if i == 0 {
@@ -1965,11 +1966,11 @@ impl AiChatRevenueScreen {
         let tooltip_el = (n > 0).then(|| {
             let ai = fallback_idx;
             let on_left = marker_tx > 0.52;
-            let cur_lbl = format_k_dollars(disp_cur[ai]);
+            let cur_lbl = format_k_dollars_comma(disp_cur[ai]);
             let prev_lbl = disp_prev
                 .get(ai)
                 .copied()
-                .map(format_k_dollars)
+                .map(format_k_dollars_comma)
                 .unwrap_or_default();
             let tip_box = div()
                 .min_w(px(148.))
@@ -2382,13 +2383,22 @@ impl AiChatRevenueScreen {
                 .or_else(|| n.checked_sub(1))
         };
 
-        let violet_c = p.purple;
-        let target_c = p.amber.opacity(0.65);
-        let grid_stroke = if p.dark {
-            hsla(0., 0., 1., 0.08)
+        let violet_c: Hsla = if p.dark {
+            rgb(0xa78bfa).into()
         } else {
-            hsla(0., 0., 0., 0.06)
+            rgb(0x7c3aed).into()
         };
+        let target_c: Hsla = if p.dark {
+            p.amber.opacity(0.78)
+        } else {
+            rgb(0xd97706).into()
+        };
+        let grid_stroke = if p.dark {
+            hsla(0., 0., 1., 0.095)
+        } else {
+            hsla(0., 0., 0., 0.08)
+        };
+        let fc_band_alpha = if p.dark { 0.16 } else { 0.12 };
         let card_bg = p.card;
         let min_v = 60.0_f32;
         let max_v = 160.0_f32;
@@ -2557,7 +2567,7 @@ impl AiChatRevenueScreen {
                     }
                     band.close();
                     if let Ok(path) = band.build() {
-                        window.paint_path(path, violet_c.opacity(0.12));
+                        window.paint_path(path, violet_c.opacity(fc_band_alpha));
                     }
 
                     for win in fc_pts.windows(2) {
@@ -2673,7 +2683,10 @@ impl AiChatRevenueScreen {
             } else {
                 tr(cx, "Forecast", "预测")
             };
-            Some((format!("{lbl} · {kind_str} {}", format_k_dollars(val)), val))
+            Some((
+                format!("{lbl} · {kind_str} {}", format_k_dollars_comma(val)),
+                val,
+            ))
         });
 
         let pace_ratio = if let Some(tv) = target
@@ -2991,8 +3004,20 @@ impl AiChatRevenueScreen {
                 .max(2.0);
                 let shade = match si {
                     0 => 1.0,
-                    1 => 0.62,
-                    _ => 0.36,
+                    1 => {
+                        if p.dark {
+                            0.68
+                        } else {
+                            0.72
+                        }
+                    }
+                    _ => {
+                        if p.dark {
+                            0.44
+                        } else {
+                            0.48
+                        }
+                    }
                 };
                 seg_els.push(div().w_full().h(px(sh)).bg(base_c.opacity(shade)));
             }
@@ -3032,12 +3057,21 @@ impl AiChatRevenueScreen {
                     .child(
                         div()
                             .text_size(px(12.))
+                            .font_weight(if picked || hovered_bar == Some(gi) {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
                             .text_color(if picked || hovered_bar == Some(gi) {
                                 p.strong
                             } else {
                                 p.muted
                             })
-                            .child(format_dollars_axis(tot)),
+                            .child(if narrow {
+                                format_dollars_axis(tot)
+                            } else {
+                                format_dollars_comma(tot)
+                            }),
                     )
                     .child(
                         div()
@@ -3179,7 +3213,7 @@ impl AiChatRevenueScreen {
                                             .text_color(p.text)
                                             .child(pname),
                                     )
-                                    .child(div().w(px(48.)).flex_none().child(pro_spring_bar(
+                                    .child(div().w(px(44.)).flex_none().child(pro_spring_bar(
                                         pro_eid(&self.id, format!("spart-bar-{turn_id}-{pi}")),
                                         ratio,
                                         4.,
@@ -3189,7 +3223,13 @@ impl AiChatRevenueScreen {
                                     )))
                                     .child(
                                         div()
-                                            .w(px(32.))
+                                            .flex_none()
+                                            .text_color(p.muted)
+                                            .child(format_dollars_comma(pval)),
+                                    )
+                                    .child(
+                                        div()
+                                            .w(px(30.))
                                             .text_right()
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.ink)
@@ -4320,11 +4360,11 @@ impl AiChatRevenueScreen {
                 ("Fieldwork Studio", "Pro Annual", "$11,000", 0.39),
             ],
             RevenueArtifactKind::WeeklyCsv => vec![
-                ("W33 (Aug 17)", "$93K", "$81K LY", 0.69),
-                ("W34 (Aug 24)", "$97K", "$80K LY", 0.72),
-                ("W35 (Aug 31 · Peak)", "$134K", "$84K LY", 1.00),
-                ("W36 (Sep 7)", "$104K", "$86K LY", 0.78),
-                ("W39 (Sep 28)", "$109K", "$90K LY", 0.81),
+                ("W33 (Aug 17)", "$93,000", "$81,000 LY", 0.69),
+                ("W34 (Aug 24)", "$97,000", "$80,000 LY", 0.72),
+                ("W35 (Aug 31 · Peak)", "$134,000", "$84,000 LY", 1.00),
+                ("W36 (Sep 7)", "$104,000", "$86,000 LY", 0.78),
+                ("W39 (Sep 28)", "$109,000", "$90,000 LY", 0.81),
             ],
         };
 
@@ -4590,6 +4630,10 @@ fn format_k_dollars(val_k: f64) -> String {
     }
 }
 
+fn format_k_dollars_comma(val_k: f64) -> String {
+    format_dollars_comma(val_k * 1_000.0)
+}
+
 fn format_dollars_compact(dollars: f64) -> String {
     if dollars >= 1_000_000.0 {
         format!("${:.2}M", dollars / 1_000_000.0)
@@ -4604,11 +4648,11 @@ fn format_dollars_compact(dollars: f64) -> String {
 
 fn format_dollars_axis(dollars: f64) -> String {
     if dollars >= 1_000_000.0 {
-        format!("${:.1}m", dollars / 1_000_000.0)
+        format!("${:.1}M", dollars / 1_000_000.0)
     } else if dollars >= 10_000.0 {
-        format!("${:.0}k", dollars / 1_000.0)
+        format!("${:.0}K", dollars / 1_000.0)
     } else if dollars >= 1_000.0 {
-        format!("${:.1}k", dollars / 1_000.0)
+        format!("${:.1}K", dollars / 1_000.0)
     } else {
         format!("${:.0}", dollars)
     }

@@ -31,6 +31,16 @@ impl Sparkline {
         self.plot.header = Some(header.into());
         self
     }
+    /// Show a percentage delta pill beside the summary value.
+    pub fn with_delta(mut self, pct: f32) -> Self {
+        self.plot.delta = pct.is_finite().then_some(pct);
+        self
+    }
+    /// Update the percentage delta pill beside the summary value.
+    pub fn set_delta(&mut self, pct: Option<f32>, cx: &mut Context<Self>) {
+        self.plot.delta = pct.filter(|v| v.is_finite());
+        cx.notify();
+    }
     pub fn set_samples(&mut self, samples: Vec<Sample>, cx: &mut Context<Self>) {
         self.plot.set_data(samples, cx);
         cx.notify()

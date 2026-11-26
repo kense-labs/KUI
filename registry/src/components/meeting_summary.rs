@@ -872,7 +872,12 @@ impl Render for MeetingSummary {
                             .text_color(p.faint)
                             .child(self.credit.clone())
                             .when_some(self.transcript_words, |row, words| {
-                                row.child(format!("· {words} {}", tr(cx, "words", "词")))
+                                let formatted = if words >= 1_000 {
+                                    format!("{},{:03}", words / 1_000, words % 1_000)
+                                } else {
+                                    words.to_string()
+                                };
+                                row.child(format!("· {formatted} {}", tr(cx, "words", "词")))
                             }),
                     )
                     .child(

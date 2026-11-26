@@ -7,10 +7,10 @@ use kui::{
             AskDataEvent, AskDataLegend, AskDataPresentation, AskDataResult, AskDataSeries,
             AskDataView, AskYourData,
         },
-        billing_toggle::BillingToggle,
+        billing_toggle::{BillingChanged, BillingPeriod, BillingToggle},
         cookie_consent::{ConsentCategory, CookieConsent},
         countdown::Countdown,
-        elastic_slider::ElasticSlider,
+        elastic_slider::{ElasticChanged, ElasticSlider},
         enrich_column::{EnrichColumn, EnrichEvent, EnrichResult, EnrichRow, EnrichSource},
         glass_menu::{GlassMenu, GlassMenuGroup, GlassMenuItem, GlassMenuSelected},
         glass_segmented::{GlassSegmentChanged, GlassSegmentOption, GlassSegmented},
@@ -18,7 +18,7 @@ use kui::{
             MegaMenuFeature, MegaMenuGroup, MegaMenuLink, MegaMenuMorph, MegaMenuNavigate,
             MegaMenuSection,
         },
-        money_input::MoneyInput,
+        money_input::{MoneyChanged, MoneyInput, decimal_grouped},
         morph_select::{MorphOption, MorphSelect},
         pii_redaction::{PiiEvent, PiiKind, PiiRedaction, PiiReplyEvent, PiiSpan, PiiStatus},
         presence_stack::{
@@ -29,12 +29,12 @@ use kui::{
             ReplyDraft, ReplyDraftEvent, ReplyHint, ReplyLength, ReplyMessage, ReplyTone,
         },
         ruler_slider::RulerSlider,
-        scrub_input::ScrubInput,
+        scrub_input::{ScrubChanged, ScrubInput},
         signature_pad::{SignaturePad, SignaturePngExported},
         smart_form_fill::{SmartField, SmartFillEvent, SmartFormFill, SmartSuggestion},
         ticket_router::{Ticket, TicketDecision, TicketLane, TicketRouter, TicketRouterEvent},
         tldr_toggle::{TldrArticle, TldrEvent, TldrMode, TldrParagraph, TldrPoint, TldrToggle},
-        toggle_group::{ToggleGroup, ToggleMode, ToggleOption},
+        toggle_group::{ToggleChanged, ToggleGroup, ToggleMode, ToggleOption},
         tree_table::{TreeTable, TreeTableEvent, TreeTableRow},
         undo_toast::{UndoItem, UndoToast, UndoToastEvent},
     },
@@ -2397,6 +2397,1340 @@ impl Render for SignatureExample {
             .child(div().text_size(px(12.)).child(self.status.clone()))
     }
 }
+
+struct BillingExample {
+    toggle: Entity<BillingToggle>,
+    period: BillingPeriod,
+    _subscription: Subscription,
+}
+impl BillingExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let toggle = cx.new(|cx| {
+            BillingToggle::new(t("Billing period", "计费周期"), cx)
+                .with_hide_label(true)
+                .with_labels(t("Monthly", "按月"), t("Yearly", "按年"))
+                .with_savings(t("Save 20%", "节省 20%"))
+        });
+        let subscription = cx.subscribe_in(
+            &toggle,
+            w,
+            |s: &mut Self, _, event: &BillingChanged, _, cx| {
+                s.period = event.0;
+                cx.notify();
+            },
+        );
+        Self {
+            toggle,
+            period: BillingPeriod::Monthly,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for BillingExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let yearly = self.period == BillingPeriod::Yearly;
+        let plans = [
+            (
+                t("Solo", "个人版"),
+                t("One person, every device", "单人使用，覆盖所有设备"),
+                10_u32,
+                8_u32,
+                96_u32,
+            ),
+            (
+                t("Team", "团队版"),
+                t("Shared spaces for up to 20", "最多 20 人的共享空间"),
+                20,
+                16,
+                192,
+            ),
+            (
+                t("Company", "企业版"),
+                t(
+                    "SSO, audit log, and admin roles",
+                    "单点登录、审计日志与管理员权限",
+                ),
+                40,
+                32,
+                384,
+            ),
+        ];
+        let mut rows = div().flex().flex_col();
+        for (i, (name, desc, mo_price, yr_price, billed)) in plans.into_iter().enumerate() {
+            let shown = if yearly { yr_price } else { mo_price };
+            let billing_note = if yearly {
+                if l == UiLanguage::Chinese {
+                    format!("按年计费 ${billed}")
+                } else {
+                    format!("${billed} billed yearly")
+                }
+            } else {
+                t("Billed monthly", "按月计费").to_owned()
+            };
+            rows = rows.child(
+                div()
+                    .w_full()
+                    .py(px(14.))
+                    .px(px(20.))
+                    .when(i > 0, |r| r.border_t_1().border_color(p.line))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(14.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(name),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.5))
+                                    .text_color(p.secondary)
+                                    .child(desc),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .flex_col()
+                            .items_end()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_baseline()
+                                    .gap(px(5.))
+                                    .when(yearly, |r| {
+                                        r.child(
+                                            div()
+                                                .text_size(px(13.))
+                                                .text_color(p.faint)
+                                                .line_through()
+                                                .child(format!("${mo_price}")),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .text_size(px(18.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(p.ink)
+                                            .child(format!("${shown}")),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .text_color(p.faint)
+                                            .child(t("/mo", "/月")),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(if yearly { p.secondary } else { p.faint })
+                                    .child(billing_note),
+                            ),
+                    ),
+            );
+        }
+        div()
+            .w_full()
+            .max_w(px(520.))
+            .mx_auto()
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(20.))
+                    .py(px(16.))
+                    .border_b_1()
+                    .border_color(p.line)
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .text_size(px(16.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.ink)
+                            .child(t("Plans", "套餐方案")),
+                    )
+                    .child(self.toggle.clone()),
+            )
+            .child(rows)
+    }
+}
+
+struct ToggleGroupExample {
+    alignment: Entity<ToggleGroup>,
+    formatting: Entity<ToggleGroup>,
+    align: SharedString,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    _subscriptions: [Subscription; 2],
+}
+impl ToggleGroupExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let align_opts = vec![
+            ToggleOption::new("left", t("Left", "左对齐")),
+            ToggleOption::new("center", t("Center", "居中")),
+            ToggleOption::new("right", t("Right", "右对齐")),
+        ];
+        let alignment = cx.new(|cx| {
+            ToggleGroup::new(
+                t("Alignment", "对齐方式"),
+                align_opts,
+                ToggleMode::Single,
+                cx,
+            )
+            .with_selected(&["left"])
+        });
+        let fmt_opts = vec![
+            ToggleOption::new("bold", t("Bold", "粗体")),
+            ToggleOption::new("italic", t("Italic", "斜体")),
+            ToggleOption::new("underline", t("Underline", "下划线")),
+        ];
+        let formatting = cx.new(|cx| {
+            ToggleGroup::new(t("Formatting", "格式"), fmt_opts, ToggleMode::Multiple, cx)
+                .with_selected(&["bold"])
+        });
+        let sub_a = cx.subscribe_in(
+            &alignment,
+            w,
+            |s: &mut Self, _, ev: &ToggleChanged, _, cx| {
+                if let Some(first) = ev.0.first() {
+                    s.align = first.clone();
+                    cx.notify();
+                }
+            },
+        );
+        let sub_f = cx.subscribe_in(
+            &formatting,
+            w,
+            |s: &mut Self, _, ev: &ToggleChanged, _, cx| {
+                s.bold = ev.0.iter().any(|k| k.as_ref() == "bold");
+                s.italic = ev.0.iter().any(|k| k.as_ref() == "italic");
+                s.underline = ev.0.iter().any(|k| k.as_ref() == "underline");
+                cx.notify();
+            },
+        );
+        Self {
+            alignment,
+            formatting,
+            align: "left".into(),
+            bold: true,
+            italic: false,
+            underline: false,
+            _subscriptions: [sub_a, sub_f],
+        }
+    }
+}
+impl Render for ToggleGroupExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let sample = t(
+            "Our spring release is about the details people touch every day: faster search, calmer notifications, and a sidebar that remembers where you left off.",
+            "春季版本聚焦每个人每天都会触碰的细节：更快的搜索、更安静的通知，以及会记住上次停留在哪里的侧边栏。",
+        );
+        div()
+            .w_full()
+            .max_w(px(510.))
+            .mx_auto()
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(14.))
+                    .py(px(12.))
+                    .border_b_1()
+                    .border_color(p.line)
+                    .bg(p.panel.blend(p.stage.opacity(0.35)))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(self.alignment.clone())
+                    .child(self.formatting.clone()),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .p(px(20.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(12.))
+                            .text_color(p.faint)
+                            .child(t("Release note · Paragraph", "发布说明 · 正文段落"))
+                            .child("15 px / 24 px"),
+                    )
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(76.))
+                            .text_size(px(15.))
+                            .line_height(px(24.))
+                            .text_color(p.ink)
+                            .font_weight(if self.bold {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::NORMAL
+                            })
+                            .when(self.italic, |d| d.italic())
+                            .when(self.underline, |d| d.underline())
+                            .when(self.align.as_ref() == "center", |d| d.text_center())
+                            .when(self.align.as_ref() == "right", |d| d.text_right())
+                            .child(sample),
+                    ),
+            )
+    }
+}
+
+struct MoneyExample {
+    control: Entity<MoneyInput>,
+    paid: bool,
+    _subscription: Subscription,
+}
+impl MoneyExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let control = cx.new(|cx| {
+            MoneyInput::new(t("Amount", "金额"), 4200, 0..=248000, w, cx)
+                .with_quick_add(vec![2000, 5000, 10000])
+        });
+        let subscription =
+            cx.subscribe_in(&control, w, |s: &mut Self, _, _: &MoneyChanged, _, cx| {
+                s.paid = false;
+                cx.notify();
+            });
+        Self {
+            control,
+            paid: false,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for MoneyExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let (symbol, minor, precision) = {
+            let input = self.control.read(cx);
+            (
+                input.symbol().to_owned(),
+                input.minor_units(),
+                input.precision(),
+            )
+        };
+        let formatted = format!("{symbol}{}", decimal_grouped(minor, precision));
+        let pay_label = if self.paid {
+            format!("{} · {formatted}", t("Paid", "已支付"))
+        } else {
+            format!("{} {formatted}", t("Pay", "支付"))
+        };
+        div()
+            .w_full()
+            .max_w(px(440.))
+            .mx_auto()
+            .p(px(22.))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .flex()
+            .flex_col()
+            .items_center()
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(360.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(16.))
+                    .child(
+                        div()
+                            .w_full()
+                            .pb(px(14.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .flex()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(
+                                img(crate::family_story::collections::portrait_image(2))
+                                    .size(px(38.))
+                                    .rounded_full()
+                                    .flex_none(),
+                            )
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(1.))
+                                    .child(
+                                        div()
+                                            .text_size(px(14.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(t(
+                                                "Pay Jasmine Brooks",
+                                                "向 Jasmine Brooks 付款",
+                                            )),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5))
+                                            .text_color(p.secondary)
+                                            .child(t("Studio lunch, Thursday", "周四工作室午餐")),
+                                    ),
+                            ),
+                    )
+                    .child(self.control.clone())
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .text_size(px(12.5))
+                            .child(
+                                div()
+                                    .text_color(p.secondary)
+                                    .child(t("Balance $2,480.00", "可用余额 $2,480.00")),
+                            )
+                            .child(
+                                div()
+                                    .text_color(p.faint)
+                                    .child(t("Instant · No fee", "即时到账 · 免手续费")),
+                            ),
+                    )
+                    .child(
+                        face(
+                            "transfer-pay",
+                            pay_label.clone(),
+                            40.,
+                            radius.into(),
+                            if self.paid {
+                                Tone::Success
+                            } else {
+                                Tone::Primary
+                            },
+                            cx,
+                        )
+                        .w_full()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(pay_label)
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            s.paid = !s.paid;
+                            cx.notify();
+                        })),
+                    ),
+            )
+    }
+}
+
+struct CountdownExample {
+    control: Entity<Countdown>,
+}
+impl CountdownExample {
+    fn new(cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let control = cx.new(|cx| {
+            Countdown::new(
+                t("KUI 2.0 keynote", "KUI 2.0 主题演讲"),
+                std::time::Duration::from_secs(95),
+                cx,
+            )
+            .with_complete_label(t("Stream is live", "直播已开始"))
+        });
+        Self { control }
+    }
+}
+impl Render for CountdownExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let schedule = [
+            ("10:00 AM", t("Keynote", "主题演讲"), "35 min"),
+            (
+                "10:35 AM",
+                t("Design systems deep dive", "设计系统深度解析"),
+                "25 min",
+            ),
+            (
+                "11:00 AM",
+                t("Live Q&A with the team", "团队实时问答"),
+                "20 min",
+            ),
+        ];
+        div()
+            .w_full()
+            .max_w(px(500.))
+            .mx_auto()
+            .p(px(22.))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .child(div().size(px(6.)).rounded_full().bg(p.success))
+                            .child(t(
+                                "Tue, Dec 1 · 10:00 AM PT · Streamed online",
+                                "12 月 1 日周二 · 10:00 PT · 线上直播",
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(18.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.ink)
+                            .child(t("KUI 2.0 keynote", "KUI 2.0 主题演讲")),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .py(px(18.))
+                    .px(px(12.))
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line.opacity(0.75))
+                    .bg(p.stage.opacity(0.55))
+                    .flex()
+                    .justify_center()
+                    .child(self.control.clone()),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .children(
+                        schedule
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (time, title, dur))| {
+                                div()
+                                    .w_full()
+                                    .py(px(9.))
+                                    .when(i > 0, |r| r.border_t_1().border_color(p.line))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    .text_size(px(13.))
+                                    .child(
+                                        div()
+                                            .w(px(66.))
+                                            .flex_none()
+                                            .text_size(px(12.))
+                                            .text_color(p.faint)
+                                            .child(time),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.ink)
+                                            .child(title),
+                                    )
+                                    .child(
+                                        div().text_size(px(12.)).text_color(p.secondary).child(dur),
+                                    )
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .pt(px(4.))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(
+                        face(
+                            "countdown-skip",
+                            t("Preview final 5s", "预览最后 5 秒"),
+                            32.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .px(px(10.))
+                        .border_1()
+                        .border_color(p.line)
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                        .child(t("Preview final 5s", "预览最后 5 秒"))
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            s.control.update(cx, |c, cx| {
+                                c.reset(std::time::Duration::from_secs(5), cx);
+                            });
+                        })),
+                    )
+                    .child(
+                        face(
+                            "countdown-reset",
+                            t("Reset timer", "重置倒计时"),
+                            32.,
+                            radius.into(),
+                            Tone::Clear,
+                            cx,
+                        )
+                        .px(px(10.))
+                        .border_1()
+                        .border_color(p.line)
+                        .text_size(px(12.))
+                        .text_color(p.secondary)
+                        .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                        .child(t("Reset timer", "重置倒计时"))
+                        .on_click(cx.listener(|s, _, _, cx| {
+                            s.control.update(cx, |c, cx| {
+                                c.reset(std::time::Duration::from_secs(95), cx);
+                            });
+                        })),
+                    ),
+            )
+    }
+}
+
+struct ElasticExample {
+    volume: Entity<ElasticSlider>,
+    speed: Entity<ElasticSlider>,
+    rate: f64,
+    _subscription: Subscription,
+}
+impl ElasticExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let volume = cx
+            .new(|cx| ElasticSlider::new(t("Volume", "音量"), 0.0..=100.0, 1.0, 68.0, "%", w, cx));
+        let speed = cx.new(|cx| {
+            let marks = vec![
+                (0.5, "0.5×".into()),
+                (1.0, "1×".into()),
+                (1.5, "1.5×".into()),
+                (2.0, "2×".into()),
+            ];
+            ElasticSlider::new(
+                t("Playback speed", "播放倍速"),
+                0.5..=2.0,
+                0.25,
+                1.0,
+                "×",
+                w,
+                cx,
+            )
+            .with_marks(marks, cx)
+        });
+        let subscription =
+            cx.subscribe_in(&speed, w, |s: &mut Self, _, ev: &ElasticChanged, _, cx| {
+                s.rate = ev.0.max(0.25);
+                cx.notify();
+            });
+        Self {
+            volume,
+            speed,
+            rate: 1.0,
+            _subscription: subscription,
+        }
+    }
+}
+impl Render for ElasticExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let minutes = (42.0 / self.rate.max(0.25)).round() as u32;
+        let helper = if l == UiLanguage::Chinese {
+            format!("按当前倍速，第 118 期将在 {minutes} 分钟内播完")
+        } else {
+            format!("Episode 118 plays in {minutes} min at this speed")
+        };
+        div()
+            .w_full()
+            .max_w(px(480.))
+            .mx_auto()
+            .p(px(20.))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .child(
+                div()
+                    .w_full()
+                    .pb(px(14.))
+                    .border_b_1()
+                    .border_color(p.line)
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .size(px(38.))
+                            .rounded(radius)
+                            .bg(p.ink.opacity(0.08))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(icon(Glyph::Play, 16., p.ink)),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .child(
+                                div()
+                                    .text_size(px(14.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.ink)
+                                    .child(t("Episode 118 · Calm tools", "第 118 期 · 宁静的工具")),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.secondary)
+                                    .child(t("Design notes podcast", "设计笔记播客")),
+                            ),
+                    ),
+            )
+            .child(self.volume.clone())
+            .child(self.speed.clone())
+            .child(
+                div()
+                    .pt(px(2.))
+                    .text_size(px(12.5))
+                    .text_color(p.secondary)
+                    .child(helper),
+            )
+    }
+}
+
+struct ScrubExample {
+    w_input: Entity<ScrubInput>,
+    h_input: Entity<ScrubInput>,
+    rot_input: Entity<ScrubInput>,
+    op_input: Entity<ScrubInput>,
+    w_val: f64,
+    h_val: f64,
+    rot_val: f64,
+    op_val: f64,
+    _subscriptions: [Subscription; 4],
+}
+impl ScrubExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let w_input = cx.new(|cx| {
+            ScrubInput::new("W", 48.0..=280.0, 1.0, 176.0, "px", w, cx)
+                .with_units(vec!["px".into(), "%".into()])
+        });
+        let h_input = cx.new(|cx| ScrubInput::new("H", 48.0..=220.0, 1.0, 120.0, "px", w, cx));
+        let rot_input = cx.new(|cx| {
+            ScrubInput::new(t("Rotation", "旋转"), 0.0..=360.0, 1.0, 12.0, "°", w, cx)
+                .with_wrap(true)
+        });
+        let op_input = cx.new(|cx| {
+            ScrubInput::new(
+                t("Opacity", "不透明度"),
+                10.0..=100.0,
+                1.0,
+                100.0,
+                "%",
+                w,
+                cx,
+            )
+        });
+        let sub_w = cx.subscribe_in(&w_input, w, |s: &mut Self, _, ev: &ScrubChanged, _, cx| {
+            s.w_val = ev.0;
+            cx.notify();
+        });
+        let sub_h = cx.subscribe_in(&h_input, w, |s: &mut Self, _, ev: &ScrubChanged, _, cx| {
+            s.h_val = ev.0;
+            cx.notify();
+        });
+        let sub_r = cx.subscribe_in(
+            &rot_input,
+            w,
+            |s: &mut Self, _, ev: &ScrubChanged, _, cx| {
+                s.rot_val = ev.0;
+                cx.notify();
+            },
+        );
+        let sub_o = cx.subscribe_in(&op_input, w, |s: &mut Self, _, ev: &ScrubChanged, _, cx| {
+            s.op_val = ev.0;
+            cx.notify();
+        });
+        Self {
+            w_input,
+            h_input,
+            rot_input,
+            op_input,
+            w_val: 176.0,
+            h_val: 120.0,
+            rot_val: 12.0,
+            op_val: 100.0,
+            _subscriptions: [sub_w, sub_h, sub_r, sub_o],
+        }
+    }
+}
+impl Render for ScrubExample {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let side_by_side = w.viewport_size().width >= px(500.);
+        let art_w = (self.w_val as f32 * 0.64).clamp(32., 188.);
+        let art_h = (self.h_val as f32 * 0.64).clamp(32., 148.);
+        let angle = (self.rot_val as f32).to_radians();
+        let alpha = (self.op_val as f32 / 100.).clamp(0.1, 1.0);
+        let preview_canvas = canvas(
+            |_, _, _| (),
+            move |bounds, _, win, _| {
+                let left = f32::from(bounds.left());
+                let top = f32::from(bounds.top());
+                let bw = f32::from(bounds.size.width);
+                let bh = f32::from(bounds.size.height);
+                let mut y = 14.0_f32;
+                while y < bh - 8. {
+                    let mut x = 14.0_f32;
+                    while x < bw - 8. {
+                        win.paint_quad(
+                            fill(
+                                Bounds::new(
+                                    point(px(left + x), px(top + y)),
+                                    size(px(1.5), px(1.5)),
+                                ),
+                                p.faint.opacity(0.24),
+                            )
+                            .corner_radii(px(1.)),
+                        );
+                        x += 16.0;
+                    }
+                    y += 16.0;
+                }
+                let cx_pt = left + bw * 0.5;
+                let cy_pt = top + bh * 0.5;
+                let (sin_a, cos_a) = angle.sin_cos();
+                let rot = |lx: f32, ly: f32| {
+                    point(
+                        px(cx_pt + lx * cos_a - ly * sin_a),
+                        px(cy_pt + lx * sin_a + ly * cos_a),
+                    )
+                };
+                let hw = art_w * 0.5;
+                let hh = art_h * 0.5;
+                let corners = [rot(-hw, -hh), rot(hw, -hh), rot(hw, hh), rot(-hw, hh)];
+                let mut poly = PathBuilder::fill();
+                poly.move_to(corners[0]);
+                for pt in &corners[1..] {
+                    poly.line_to(*pt);
+                }
+                poly.close();
+                if let Ok(shape) = poly.build() {
+                    let fill_col: Hsla = rgb(0x3b82f6).into();
+                    win.paint_path(shape, fill_col.opacity(0.18 * alpha));
+                }
+                let inner = [
+                    rot(-hw * 0.58, -hh * 0.42),
+                    rot(hw * 0.58, -hh * 0.42),
+                    rot(hw * 0.58, hh * 0.42),
+                    rot(-hw * 0.58, hh * 0.42),
+                ];
+                let mut inner_poly = PathBuilder::fill();
+                inner_poly.move_to(inner[0]);
+                for pt in &inner[1..] {
+                    inner_poly.line_to(*pt);
+                }
+                inner_poly.close();
+                if let Ok(shape) = inner_poly.build() {
+                    let accent: Hsla = rgb(0x6366f1).into();
+                    win.paint_path(shape, accent.opacity(0.55 * alpha));
+                }
+                let mut frame = PathBuilder::stroke(px(1.25));
+                frame.move_to(corners[0]);
+                for pt in &corners[1..] {
+                    frame.line_to(*pt);
+                }
+                frame.close();
+                if let Ok(shape) = frame.build() {
+                    win.paint_path(shape, p.ink.opacity(0.65 * alpha));
+                }
+                for c in corners {
+                    win.paint_quad(quad(
+                        Bounds::new(c - point(px(3.), px(3.)), size(px(6.), px(6.))),
+                        Corners::all(px(1.5)),
+                        p.panel,
+                        Edges::all(px(1.2)),
+                        p.ink.opacity(0.8),
+                        BorderStyle::Solid,
+                    ));
+                }
+            },
+        )
+        .size_full();
+        let readout = format!(
+            "{:.0} × {:.0} · {:.0}°",
+            self.w_val, self.h_val, self.rot_val
+        );
+        div()
+            .w_full()
+            .max_w(px(552.))
+            .mx_auto()
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel)
+            .overflow_hidden()
+            .flex()
+            .when(side_by_side, |d| d.flex_row().items_stretch())
+            .when(!side_by_side, |d| d.flex_col())
+            .child(
+                div()
+                    .relative()
+                    .when(side_by_side, |d| d.flex_1().min_w_0().min_h(px(264.)))
+                    .when(!side_by_side, |d| d.w_full().h(px(210.)))
+                    .bg(p.stage.opacity(0.6))
+                    .child(preview_canvas)
+                    .child(
+                        div()
+                            .absolute()
+                            .top(px(10.))
+                            .left(px(10.))
+                            .px(px(8.))
+                            .py(px(3.))
+                            .rounded(radius)
+                            .bg(p.panel.opacity(0.88))
+                            .border_1()
+                            .border_color(p.line)
+                            .text_size(px(11.5))
+                            .text_color(p.secondary)
+                            .child(readout),
+                    )
+                    .child(
+                        div().absolute().bottom(px(10.)).right(px(10.)).child(
+                            face(
+                                "scrub-reset",
+                                t("Reset frame", "重置画框"),
+                                28.,
+                                radius.into(),
+                                Tone::Surface,
+                                cx,
+                            )
+                            .px(px(9.))
+                            .border_1()
+                            .border_color(p.line)
+                            .text_size(px(11.5))
+                            .text_color(p.secondary)
+                            .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                            .child(t("Reset frame", "重置画框"))
+                            .on_click(cx.listener(|s, _, win, cx| {
+                                s.w_val = 176.0;
+                                s.h_val = 120.0;
+                                s.rot_val = 12.0;
+                                s.op_val = 100.0;
+                                s.w_input.update(cx, |i, cx| i.set_value(176.0, win, cx));
+                                s.h_input.update(cx, |i, cx| i.set_value(120.0, win, cx));
+                                s.rot_input.update(cx, |i, cx| i.set_value(12.0, win, cx));
+                                s.op_input.update(cx, |i, cx| i.set_value(100.0, win, cx));
+                                cx.notify();
+                            })),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .when(side_by_side, |d| d.w(px(228.)).flex_none().border_l_1())
+                    .when(!side_by_side, |d| d.w_full().border_t_1())
+                    .border_color(p.line)
+                    .p(px(16.))
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.ink)
+                            .mb(px(2.))
+                            .child(t("Frame properties", "图层属性")),
+                    )
+                    .child(self.w_input.clone())
+                    .child(self.h_input.clone())
+                    .child(self.rot_input.clone())
+                    .child(self.op_input.clone()),
+            )
+    }
+}
+
+struct MorphSelectExample {
+    status: Entity<MorphSelect>,
+    assignee: Entity<MorphSelect>,
+    priority: Entity<MorphSelect>,
+}
+impl MorphSelectExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let status_opts = vec![
+            MorphOption::new("backlog", t("Backlog", "待处理")).with_group(t("Open", "开放")),
+            MorphOption::new("todo", t("To do", "待办")).with_group(t("Open", "开放")),
+            MorphOption::new("progress", t("In progress", "进行中")).with_group(t("Open", "开放")),
+            MorphOption::new("review", t("In review", "审核中")).with_group(t("Open", "开放")),
+            MorphOption::new("done", t("Done", "已完成")).with_group(t("Closed", "已关闭")),
+            MorphOption::new("cancelled", t("Cancelled", "已取消"))
+                .with_group(t("Closed", "已关闭")),
+        ];
+        let assignee_opts = vec![
+            MorphOption::new("jasmine", "Jasmine Brooks").with_detail(t("Design", "设计")),
+            MorphOption::new("marcus", "Marcus Johnson").with_detail(t("Frontend", "前端")),
+            MorphOption::new("emma", "Emma Collins").with_detail(t("Systems", "系统")),
+            MorphOption::new("daniel", "Daniel Kim").with_detail(t("Checkout", "结账")),
+            MorphOption::new("none", t("Unassigned", "未指派")),
+        ];
+        let priority_opts = vec![
+            MorphOption::new("urgent", t("Urgent", "紧急")),
+            MorphOption::new("high", t("High", "高")),
+            MorphOption::new("medium", t("Medium", "中")),
+            MorphOption::new("low", t("Low", "低")),
+        ];
+        let status = cx.new(|cx| {
+            MorphSelect::new(t("Status", "状态"), status_opts, w, cx)
+                .with_value("progress")
+                .with_searchable(true)
+                .with_panel_width(240.)
+        });
+        let assignee = cx.new(|cx| {
+            MorphSelect::new(t("Assignee", "负责人"), assignee_opts, w, cx)
+                .with_value("jasmine")
+                .with_panel_width(240.)
+        });
+        let priority = cx.new(|cx| {
+            MorphSelect::new(t("Priority", "优先级"), priority_opts, w, cx)
+                .with_value("high")
+                .with_panel_width(220.)
+        });
+        Self {
+            status,
+            assignee,
+            priority,
+        }
+    }
+}
+impl Render for MorphSelectExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let prop_row = |name: &'static str, control: Entity<MorphSelect>, top_line: bool| {
+            div()
+                .w_full()
+                .py(px(10.))
+                .when(top_line, |r| r.border_t_1().border_color(p.line))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(
+                    div()
+                        .w(px(104.))
+                        .flex_none()
+                        .text_size(px(13.))
+                        .text_color(p.secondary)
+                        .child(name),
+                )
+                .child(div().flex_1().min_w_0().child(control))
+        };
+        div()
+            .w_full()
+            .pb(px(56.))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(500.))
+                    .mx_auto()
+                    .p(px(20.))
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(p.line)
+                    .bg(p.panel)
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .w_full()
+                            .pb(px(14.))
+                            .mb(px(4.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .flex()
+                            .flex_col()
+                            .gap(px(5.))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_family("Fira Code")
+                                    .text_color(p.faint)
+                                    .child("KUI-418"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(16.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.ink)
+                                    .child(t(
+                                        "Checkout button stalls on Safari 17",
+                                        "Safari 17 上结账按钮偶发卡顿",
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .line_height(px(19.))
+                                    .text_color(p.secondary)
+                                    .child(t(
+                                        "Apple Pay sheet closes without resolving the payment promise when shipping address changes.",
+                                        "修改收货地址后关闭 Apple Pay 面板时，支付状态未能及时恢复。",
+                                    )),
+                            ),
+                    )
+                    .child(prop_row(t("Status", "状态"), self.status.clone(), false))
+                    .child(prop_row(
+                        t("Assignee", "负责人"),
+                        self.assignee.clone(),
+                        true,
+                    ))
+                    .child(prop_row(
+                        t("Priority", "优先级"),
+                        self.priority.clone(),
+                        true,
+                    )),
+            )
+    }
+}
+
+struct CookieConsentExample {
+    control: Entity<CookieConsent>,
+}
+impl CookieConsentExample {
+    fn new(w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let categories = vec![
+            ConsentCategory::new("essential", t("Essential", "必要"))
+                .with_required(true)
+                .with_description(t("Needed for basic site functions", "网站基础功能所需")),
+            ConsentCategory::new("analytics", t("Analytics", "分析"))
+                .with_description(t("Help improve the experience", "帮助改善使用体验")),
+            ConsentCategory::new("personalization", t("Personalization", "个性化")),
+        ];
+        let control = cx.new(|cx| CookieConsent::new(categories, w, cx));
+        Self { control }
+    }
+}
+impl Render for CookieConsentExample {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let l = UiLanguage::current(cx);
+        let t = |en: &'static str, zh: &'static str| l.text(en, zh);
+        let p = Paint::get(cx);
+        let radius = kui::foundation::surface_radius(cx);
+        let decided = self.control.read(cx).is_decided();
+        let skel = |w_px: f32, h_px: f32, op: f32| {
+            div()
+                .w(px(w_px))
+                .max_w_full()
+                .h(px(h_px))
+                .rounded(px(4.))
+                .bg(p.ink.opacity(op))
+        };
+        div()
+            .w_full()
+            .max_w(px(580.))
+            .mx_auto()
+            .min_h(px(400.))
+            .rounded(radius)
+            .border_1()
+            .border_color(p.line)
+            .bg(p.panel.blend(p.stage.opacity(0.45)))
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .justify_between()
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .h(px(36.))
+                            .px(px(14.))
+                            .border_b_1()
+                            .border_color(p.line)
+                            .bg(p.panel)
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(div().flex().items_center().gap(px(6.)).children(
+                                (0..3).map(|_| div().size(px(7.)).rounded_full().bg(p.line)),
+                            ))
+                            .child(
+                                div()
+                                    .px(px(12.))
+                                    .py(px(2.))
+                                    .rounded_full()
+                                    .bg(p.stage.opacity(0.75))
+                                    .text_size(px(11.))
+                                    .text_color(p.faint)
+                                    .child("kense.dev"),
+                            )
+                            .child(div().w(px(33.))),
+                    )
+                    .child(
+                        div()
+                            .p(px(20.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(14.))
+                            .child(skel(110., 10., 0.08))
+                            .child(skel(280., 18., 0.12))
+                            .child(skel(380., 10., 0.06))
+                            .child(
+                                div()
+                                    .pt(px(4.))
+                                    .flex()
+                                    .gap(px(12.))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .h(px(68.))
+                                            .rounded(radius)
+                                            .border_1()
+                                            .border_color(p.line.opacity(0.7))
+                                            .bg(p.panel.opacity(0.65)),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .h(px(68.))
+                                            .rounded(radius)
+                                            .border_1()
+                                            .border_color(p.line.opacity(0.7))
+                                            .bg(p.panel.opacity(0.65)),
+                                    ),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .p(px(12.))
+                    .flex()
+                    .items_end()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(self.control.clone())
+                    .when(decided, |bar| {
+                        bar.child(
+                            face(
+                                "cookie-reset",
+                                t("Reset banner", "重置横幅"),
+                                30.,
+                                radius.into(),
+                                Tone::Clear,
+                                cx,
+                            )
+                            .px(px(10.))
+                            .text_size(px(12.))
+                            .text_color(p.secondary)
+                            .hover(move |s| s.bg(p.hover).text_color(p.ink))
+                            .child(t("Reset banner", "重置横幅"))
+                            .on_click(cx.listener(|s, _, _, cx| {
+                                s.control.update(cx, |c, cx| c.reset(cx));
+                            })),
+                        )
+                    }),
+            )
+    }
+}
 impl Render for InputExamples {
     fn render(&mut self, w: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let mut stack = div()
@@ -2507,43 +3841,8 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
         }
         "tree-table" => views.push(cx.new(|cx| TreeExample::new(w, cx)).into()),
         "undo-toast" => views.push(cx.new(|cx| UndoExample::new(w, cx)).into()),
-        "morph-select" => {
-            let options = vec![
-                MorphOption::new("backlog", t("Backlog", "待处理")).with_group(t("Open", "开放")),
-                MorphOption::new("todo", t("To do", "待办")).with_group(t("Open", "开放")),
-                MorphOption::new("progress", t("In progress", "进行中"))
-                    .with_group(t("Open", "开放")),
-                MorphOption::new("review", t("In review", "审核中")).with_group(t("Open", "开放")),
-                MorphOption::new("done", t("Done", "已完成")).with_group(t("Closed", "已关闭")),
-                MorphOption::new("cancelled", t("Cancelled", "已取消"))
-                    .with_group(t("Closed", "已关闭")),
-            ];
-            views.push(
-                cx.new(|cx| {
-                    MorphSelect::new(t("Status", "状态"), options, w, cx)
-                        .with_value("progress")
-                        .with_searchable(true)
-                })
-                .into(),
-            );
-        }
-
-        "scrub-input" => {
-            views.push(
-                cx.new(|cx| {
-                    ScrubInput::new(t("Width", "宽度"), 0.0..=1000.0, 1.0, 176.0, "px", w, cx)
-                        .with_units(vec!["px".into(), "%".into()])
-                })
-                .into(),
-            );
-            views.push(
-                cx.new(|cx| {
-                    ScrubInput::new(t("Rotation", "旋转"), 0.0..=360.0, 1.0, 45.0, "°", w, cx)
-                        .with_wrap(true)
-                })
-                .into(),
-            );
-        }
+        "morph-select" => views.push(cx.new(|cx| MorphSelectExample::new(w, cx)).into()),
+        "scrub-input" => views.push(cx.new(|cx| ScrubExample::new(w, cx)).into()),
         "signature-pad" => views.push(cx.new(|cx| SignatureExample::new(w, cx)).into()),
         "ruler-slider" => {
             views.push(
@@ -2561,17 +3860,7 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
                 .into(),
             );
         }
-        "cookie-consent" => {
-            let categories = vec![
-                ConsentCategory::new("essential", t("Essential", "必要"))
-                    .with_required(true)
-                    .with_description(t("Needed for basic site functions", "网站基础功能所需")),
-                ConsentCategory::new("analytics", t("Analytics", "分析"))
-                    .with_description(t("Help improve the experience", "帮助改善使用体验")),
-                ConsentCategory::new("personalization", t("Personalization", "个性化")),
-            ];
-            views.push(cx.new(|cx| CookieConsent::new(categories, w, cx)).into());
-        }
+        "cookie-consent" => views.push(cx.new(|cx| CookieConsentExample::new(w, cx)).into()),
         "announcement-bar" => {
             let messages = vec![
                 Announcement::new(
@@ -2606,70 +3895,21 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
                 .into(),
             );
         }
-        "elastic-slider" => views.push(
-            cx.new(|cx| {
-                ElasticSlider::new(t("Volume", "音量"), 0.0..=100.0, 1.0, 50.0, "%", w, cx)
-            })
-            .into(),
-        ),
-        "countdown" => views.push(
-            cx.new(|cx| {
-                Countdown::new(
-                    t("Launch", "发布倒计时"),
-                    std::time::Duration::from_secs(95),
-                    cx,
-                )
-                .with_complete_label(t("Live now", "现已发布"))
-            })
-            .into(),
-        ),
-        "money-input" => views.push(
-            cx.new(|cx| {
-                MoneyInput::new(t("Amount", "金额"), 12500, 0..=1000000, w, cx)
-                    .with_quick_add(vec![1000, 5000])
-            })
-            .into(),
-        ),
-        "billing-toggle" => views.push(
-            cx.new(|cx| {
-                BillingToggle::new(t("Billing period", "计费周期"), cx)
-                    .with_labels(t("Monthly", "按月"), t("Yearly", "按年"))
-                    .with_savings(t("Save 20%", "节省 20%"))
-            })
-            .into(),
-        ),
-        "toggle-group" => {
-            let options = vec![
-                ToggleOption::new("left", t("Left", "左对齐")),
-                ToggleOption::new("center", t("Center", "居中")),
-                ToggleOption::new("right", t("Right", "右对齐")),
-            ];
-            views.push(
-                cx.new(|cx| {
-                    ToggleGroup::new(t("Alignment", "对齐方式"), options, ToggleMode::Single, cx)
-                        .with_selected(&["left"])
-                })
-                .into(),
-            );
-            let options = vec![
-                ToggleOption::new("bold", t("Bold", "粗体")),
-                ToggleOption::new("italic", t("Italic", "斜体")),
-                ToggleOption::new("underline", t("Underline", "下划线")),
-            ];
-            views.push(
-                cx.new(|cx| {
-                    ToggleGroup::new(t("Formatting", "格式"), options, ToggleMode::Multiple, cx)
-                        .with_selected(&["bold"])
-                })
-                .into(),
-            );
-        }
+        "elastic-slider" => views.push(cx.new(|cx| ElasticExample::new(w, cx)).into()),
+        "countdown" => views.push(cx.new(CountdownExample::new).into()),
+        "money-input" => views.push(cx.new(|cx| MoneyExample::new(w, cx)).into()),
+        "billing-toggle" => views.push(cx.new(|cx| BillingExample::new(w, cx)).into()),
+        "toggle-group" => views.push(cx.new(|cx| ToggleGroupExample::new(w, cx)).into()),
         _ => return None,
     }
     let width = if id == "ticket-router" {
         872.
     } else if id == "mega-menu-morph" {
         680.
+    } else if id == "cookie-consent" {
+        612.
+    } else if id == "scrub-input" {
+        584.
     } else if matches!(
         id,
         "announcement-bar"
@@ -2678,8 +3918,15 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
             | "glass-menu"
             | "glass-segmented"
             | "ask-your-data"
+            | "billing-toggle"
+            | "toggle-group"
+            | "countdown"
+            | "elastic-slider"
+            | "morph-select"
     ) {
         554.
+    } else if id == "money-input" {
+        472.
     } else if id == "tree-table"
         || id == "tldr-toggle"
         || id == "smart-form-fill"
@@ -2693,7 +3940,14 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
     };
     let padded = matches!(
         id,
-        "glass-menu" | "glass-segmented" | "ticket-router" | "ask-your-data"
+        "glass-menu"
+            | "glass-segmented"
+            | "ticket-router"
+            | "ask-your-data"
+            | "billing-toggle"
+            | "countdown"
+            | "morph-select"
+            | "cookie-consent"
     );
     Some(
         cx.new(|_| InputExamples {

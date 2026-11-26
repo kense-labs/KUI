@@ -1019,7 +1019,8 @@ impl Render for FamilyStory {
             ("date-range-picker", false) => (567., Some(109.)),
             ("mention-input", true) => (481., Some(56.)),
             ("mention-input", false) => (520., Some(101.)),
-            ("shortcut-recorder", _) => (1019., None),
+            ("shortcut-recorder", _) if vw >= 620. => (560., None),
+            ("shortcut-recorder", _) => (980., None),
             ("ai-translate", false) => (600., Some(106.)),
             ("ai-translate", true) => (600., Some(32.)),
             ("tool-call", false) => (520., Some(90.)),
@@ -1065,10 +1066,13 @@ impl Render for FamilyStory {
             )
             .when(narrow && self.id == "mention-input", |el| el.px(px(25.)))
             .when_some(top, |el, inset| el.justify_start().pt(px(inset)))
-            .when(
-                matches!(self.id.as_str(), "provider-keys" | "shortcut-recorder"),
-                |el| el.p(px(if narrow { 25. } else { 53. })).justify_start(),
-            )
+            .when(self.id == "provider-keys", |el| {
+                el.p(px(if narrow { 25. } else { 53. })).justify_start()
+            })
+            .when(self.id == "shortcut-recorder", |el| {
+                el.p(px(if narrow { 16. } else { 24. }))
+                    .when(vw < 620., |el| el.justify_start())
+            })
             .when(self.id == "provider-keys", |el| {
                 // The editor expands below the active row. Keep the header anchored.
                 el.min_h(px(0.))

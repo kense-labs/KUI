@@ -14,7 +14,7 @@ use std::{cell::Cell, f32::consts::TAU, rc::Rc, time::Duration};
 
 pub use crate::primitives::form_dates::CivilDate;
 
-const BREAKPOINT: f32 = 600.;
+const BREAKPOINT: f32 = 540.;
 const CARD_WIDTH: f32 = 340.;
 const WEEKDAYS: [&str; 7] = [
     "Sunday",
@@ -182,7 +182,6 @@ pub struct TrialBanner {
     payment_width: Option<Slide>,
     pill_width: Option<Slide>,
     text_change: PhaseClock,
-    last_text: Option<[SharedString; 2]>,
     text: Option<[SharedString; 2]>,
     width: Rc<Cell<Pixels>>,
     pill_bounds: TriggerBounds,
@@ -233,7 +232,6 @@ impl TrialBanner {
             payment_width: None,
             pill_width: None,
             text_change: PhaseClock::default(),
-            last_text: None,
             text: None,
             width: Rc::default(),
             pill_bounds: TriggerBounds::default(),
@@ -520,50 +518,33 @@ impl TrialBanner {
     fn heading(&mut self, card: bool, p: Paint, w: &Window, cx: &App) -> Div {
         let next = self.strings(card, cx);
         if self.text.as_ref() != Some(&next) {
-            self.last_text = self.text.replace(next.clone());
-            if self.last_text.is_some() {
+            let had_prev = self.text.replace(next.clone()).is_some();
+            if had_prev {
                 self.text_change.restart(cx);
             }
         }
         let elapsed = self.text_change.time(0.16, w, cx);
         let entering = ease(elapsed / 0.16);
-        let leaving = 1. - ease(elapsed / 0.10);
-        let content = |lines: [SharedString; 2]| {
-            column()
-                .gap(px(2.))
-                .child(
-                    div()
-                        .text_size(px(14.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .line_height(px(20.))
-                        .child(lines[0].clone()),
-                )
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .line_height(px(18.))
-                        .text_color(p.secondary)
-                        .child(lines[1].clone()),
-                )
-        };
         column()
+            .min_w_0()
+            .gap(px(2.))
+            .opacity(0.68 + 0.32 * entering)
             .relative()
+            .top(px(2. * (1. - entering)))
             .child(
-                content(next)
-                    .opacity(entering)
-                    .relative()
-                    .top(px(2. * (1. - entering))),
+                div()
+                    .text_size(px(14.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .line_height(px(20.))
+                    .child(next[0].clone()),
             )
-            .when(leaving > 0., |div| {
-                div.children(self.last_text.clone().map(|old| {
-                    content(old)
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .right_0()
-                        .opacity(leaving)
-                }))
-            })
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .line_height(px(18.))
+                    .text_color(p.secondary)
+                    .child(next[1].clone()),
+            )
     }
 
     fn indicator(&self, size: f32, w: &Window, cx: &App) -> Div {
@@ -732,7 +713,8 @@ impl TrialBanner {
         let heading = self.heading(false, p, w, cx);
         let [compare, pay] = self.controls(false, 36., w, cx);
         let actions = row()
-            .flex_wrap()
+            .when(narrow, |r| r.flex_wrap())
+            .when(!narrow, |r| r.flex_none())
             .gap(px(4.))
             .when(!self.upgraded, |r| r.child(compare))
             .child(pay);
@@ -753,9 +735,10 @@ impl TrialBanner {
         } else {
             column().w_full().child(
                 row()
+                    .items_center()
                     .gap(px(10.))
                     .child(self.indicator(28., w, cx))
-                    .child(heading.flex_1())
+                    .child(heading.flex_1().min_w_0())
                     .child(actions)
                     .child(utilities),
             )

@@ -109,6 +109,7 @@ pub struct LinkUnfurl {
     presence: Slide,
     simulated: bool,
     samples: Vec<LinkSample>,
+    preview_images: Vec<(SharedString, ImageSource)>,
     auto_open: bool,
 }
 impl EventEmitter<LinkUnfurlEvent> for LinkUnfurl {}
@@ -158,6 +159,7 @@ impl LinkUnfurl {
             presence: Slide::new(0.),
             simulated: false,
             samples: Vec::new(),
+            preview_images: Vec::new(),
             auto_open: true,
         }
     }
@@ -169,6 +171,36 @@ impl LinkUnfurl {
     pub fn with_samples(mut self, samples: Vec<LinkSample>) -> Self {
         self.samples = samples;
         self
+    }
+    /// Associate a preloaded image source with a preview URL.
+    pub fn with_preview_image(
+        mut self,
+        url: impl Into<SharedString>,
+        image: impl Into<ImageSource>,
+    ) -> Self {
+        self.preview_images.push((url.into(), image.into()));
+        self
+    }
+    /// Seed an initial draft and resolved preview immediately on mount.
+    pub fn set_initial_draft(
+        &mut self,
+        text: impl Into<String>,
+        preview: LinkPreview,
+        w: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let raw = text.into();
+        let shared: SharedString = raw.clone().into();
+        self.text = shared.clone();
+        self.url = first_url(&shared);
+        self.preview = Some(preview);
+        self.error = None;
+        self.resolve_id = None;
+        self.open = self.auto_open;
+        self.presence.reset(f32::from(self.open));
+        self.editor
+            .update(cx, |editor, cx| editor.set_value(raw, w, cx));
+        cx.notify();
     }
     /// Wait for activation of the resolved link before opening its card.
     pub fn with_collapsed_previews(mut self) -> Self {
@@ -442,110 +474,117 @@ impl Render for LinkUnfurl {
             );
             panel = panel.child(controls);
             if let Some(preview) = self.preview.clone().filter(|_| self.open || progress > 0.) {
-                let height = if preview.image.is_some() { 372. } else { 148. };
+                let image_source = preview.image.clone().map(ImageSource::Render).or_else(|| {
+                    self.preview_images
+                        .iter()
+                        .find(|(u, _)| u == &url)
+                        .map(|(_, src)| src.clone())
+                });
+                let site_icon = self
+                    .samples
+                    .iter()
+                    .find(|s| s.label == preview.site)
+                    .map(|s| s.icon.clone());
+                let height = if image_source.is_some() { 376. } else { 156. };
+                let target = url.clone();
+                let open_button = face(
+                    "link-open",
+                    tr(cx, "Open link", "打开链接"),
+                    28.,
+                    crate::foundation::surface_radius(cx).into(),
+                    Tone::Surface,
+                    cx,
+                )
+                .px(px(8.))
+                .text_size(px(12.))
+                .border_1()
+                .border_color(p.line)
+                .hover(|s| s.bg(p.hover))
+                .child(tr(cx, "Open link", "打开链接"))
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    cx.emit(LinkUnfurlEvent::Open {
+                        url: target.clone(),
+                    })
+                }))
+                .on_key_down(cx.listener(move |s, e: &KeyDownEvent, _, cx| {
+                    if matches!(e.keystroke.key.as_str(), "enter" | "space") && !e.is_held {
+                        if let Some(url) = s.url.clone() {
+                            cx.emit(LinkUnfurlEvent::Open { url });
+                        }
+                        cx.stop_propagation();
+                    }
+                }));
                 let mut card = column()
                     .w_full()
-                    .max_w(px(440.))
-                    .p(px(8.))
+                    .max_w(px(460.))
+                    .p(px(12.))
+                    .gap(px(4.))
                     .rounded(crate::foundation::surface_radius(cx))
                     .bg(p.panel)
                     .border_1()
                     .border_color(p.line)
-                    .shadow(vec![
-                        gpui::BoxShadow {
-                            color: p.ink.opacity(0.18),
-                            offset: gpui::point(px(0.), px(18.)),
-                            blur_radius: px(40.),
-                            spread_radius: px(0.),
-                            inset: false,
-                        },
-                        gpui::BoxShadow {
-                            color: p.ink.opacity(0.12),
-                            offset: gpui::point(px(0.), px(4.)),
-                            blur_radius: px(12.),
-                            spread_radius: px(0.),
-                            inset: false,
-                        },
-                    ])
+                    .shadow_sm()
                     .child(
                         row()
-                            .h(px(30.))
+                            .w_full()
                             .items_center()
+                            .justify_between()
                             .gap(px(8.))
-                            .pl(px(7.))
                             .child(
-                                div()
-                                    .text_size(px(12.))
-                                    .line_height(px(20.))
-                                    .text_color(p.secondary)
-                                    .child(preview.site),
-                            ),
+                                row()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .when_some(site_icon, |r, ic| {
+                                        r.child(img(ic).size(px(14.)).flex_none())
+                                    })
+                                    .child(
+                                        div()
+                                            .text_size(px(12.))
+                                            .line_height(px(18.))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_color(p.secondary)
+                                            .child(preview.site),
+                                    ),
+                            )
+                            .child(open_button),
                     )
                     .child(
                         div()
                             .pt(px(2.))
-                            .px(px(6.))
-                            .text_size(px(16.))
-                            .line_height(px(22.))
+                            .text_size(px(15.))
+                            .line_height(px(21.))
                             .font_weight(FontWeight::MEDIUM)
-                            .hover(|s| s.border_b_1().border_color(p.bright.opacity(0.34)))
+                            .text_color(p.ink)
                             .child(preview.title),
                     )
                     .child(
                         div()
-                            .px(px(6.))
-                            .text_size(px(14.))
-                            .line_height(px(20.))
+                            .text_size(px(13.))
+                            .line_height(px(19.))
                             .text_color(p.secondary)
                             .child(preview.description),
                     );
-                if let Some(image) = preview.image {
+                if let Some(source) = image_source {
                     card = card.child(
-                        img(ImageSource::Render(image))
+                        img(source)
                             .w_full()
-                            .h(px(228.))
-                            .mt(px(8.))
-                            .mx(px(-6.))
-                            .object_fit(ObjectFit::Cover)
-                            .rounded(px(0.)),
+                            .h(px(208.))
+                            .mt(px(6.))
+                            .rounded(px(6.))
+                            .overflow_hidden()
+                            .object_fit(ObjectFit::Cover),
                     );
                 }
-                let target = url.clone();
-                card = card.child(
-                    face(
-                        "link-open",
-                        tr(cx, "Open link", "打开链接"),
-                        32.,
-                        crate::foundation::surface_radius(cx).into(),
-                        Tone::Surface,
-                        cx,
-                    )
-                    .px(px(8.))
-                    .child(tr(cx, "Open link", "打开链接"))
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        cx.emit(LinkUnfurlEvent::Open {
-                            url: target.clone(),
-                        })
-                    }))
-                    .on_key_down(cx.listener(
-                        move |s, e: &KeyDownEvent, _, cx| {
-                            if matches!(e.keystroke.key.as_str(), "enter" | "space") && !e.is_held {
-                                if let Some(url) = s.url.clone() {
-                                    cx.emit(LinkUnfurlEvent::Open { url });
-                                }
-                                cx.stop_propagation();
-                            }
-                        },
-                    )),
-                );
-                panel = panel.child(
+                panel = panel.child(if progress >= 0.995 {
+                    div().w_full().child(card)
+                } else {
                     div()
                         .w_full()
-                        .h(px(height * progress))
+                        .max_h(px(height * progress))
                         .overflow_hidden()
                         .opacity(progress)
-                        .child(card),
-                );
+                        .child(card)
+                });
             }
         }
         if let Some(error) = self.error.clone() {

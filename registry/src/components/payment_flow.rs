@@ -263,7 +263,7 @@ impl Layout {
                 height: 56.,
             })
         } else {
-            let card_width = (width * 0.18).clamp(128., 138.);
+            let card_width = (width * 0.194).round().clamp(138., 148.);
             std::array::from_fn(|i| Card {
                 origin: xy(
                     if i < 4 {
@@ -1088,7 +1088,7 @@ impl Render for PaymentFlow {
                     },
                     |mark| mark(),
                 );
-                let pad = if card.width >= 134. { 13. } else { 8. };
+                let pad = if card.width >= 134. { 9. } else { 8. };
                 div()
                     .id(("payment-node", i))
                     .debug_selector(move || format!("payment-node-{i}"))
@@ -1100,7 +1100,7 @@ impl Render for PaymentFlow {
                     .px(px(pad))
                     .flex()
                     .items_center()
-                    .gap(px(if card.width >= 134. { 10. } else { 7. }))
+                    .gap(px(if card.width >= 134. { 7. } else { 6. }))
                     .border_1()
                     .border_color(if over || active_stage {
                         accent.opacity(0.92)
@@ -1148,7 +1148,7 @@ impl Render for PaymentFlow {
                                     .min_w(px(0.))
                                     .flex()
                                     .items_center()
-                                    .gap(px(6.))
+                                    .gap(px(5.))
                                     .text_size(px(12.))
                                     .line_height(px(16.))
                                     .text_color(if success {

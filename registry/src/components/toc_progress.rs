@@ -217,17 +217,20 @@ impl Render for ReadingOutline {
         )
         .absolute()
         .inset_0();
+        let desktop = w.viewport_size().width >= px(560.);
         let toc = panel(cx)
-            .p_4()
+            .when(desktop, |d| d.w(px(212.)).flex_none().p_3())
+            .when(!desktop, |d| d.p_4())
             .child(
                 row()
                     .justify_between()
+                    .gap_2()
                     .pb_3()
                     .child(
-                        label(tr(cx, "On this page", "本页目录"), 14., p.ink)
+                        label(tr(cx, "On this page", "本页目录"), 13., p.ink)
                             .font_weight(FontWeight::MEDIUM),
                     )
-                    .child(label(remaining, 12., p.faint)),
+                    .child(label(remaining, 11., p.faint)),
             )
             .child(toc.child(rail).on_children_prepainted(move |boxes, _, _| {
                 *layout.borrow_mut() = boxes.iter().take(count).copied().collect();
@@ -247,24 +250,37 @@ impl Render for ReadingOutline {
         .absolute()
         .inset_0();
         let height = px(416.);
-        column().w(fit(w, 520.)).gap_3().child(toc).child(
-            panel(cx)
-                .p_4()
-                .gap_4()
-                .child(
-                    column()
-                        .px_3()
-                        .gap_1()
-                        .child(
-                            label(self.title.clone(), 26., p.ink)
-                                .font_weight(FontWeight::MEDIUM)
-                                .line_height(px(31.)),
-                        )
-                        .when_some(self.byline.clone(), |head, byline| {
-                            head.child(label(byline, 12., p.faint))
-                        }),
-                )
-                .child(div().relative().h(height).child(article).child(monitor)),
-        )
+        let article_panel = panel(cx)
+            .when(desktop, |d| d.flex_1().min_w_0())
+            .p_4()
+            .gap_4()
+            .child(
+                column()
+                    .px_3()
+                    .gap_1()
+                    .child(
+                        label(self.title.clone(), 26., p.ink)
+                            .font_weight(FontWeight::MEDIUM)
+                            .line_height(px(31.)),
+                    )
+                    .when_some(self.byline.clone(), |head, byline| {
+                        head.child(label(byline, 12., p.faint))
+                    }),
+            )
+            .child(div().relative().h(height).child(article).child(monitor));
+        if desktop {
+            row()
+                .items_start()
+                .w(fit(w, 728.))
+                .gap_3()
+                .child(article_panel)
+                .child(toc)
+        } else {
+            column()
+                .w(fit(w, 520.))
+                .gap_3()
+                .child(toc)
+                .child(article_panel)
+        }
     }
 }

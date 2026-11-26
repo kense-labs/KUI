@@ -1160,11 +1160,11 @@ fn readouts(
     paint: Paint,
     radius: Pixels,
     side_by_side: bool,
-    narrow: bool,
+    compact: bool,
 ) -> Div {
     div()
         .when(side_by_side, |e| {
-            e.flex_none().w(relative(0.379)).h(px(213.))
+            e.flex_none().w(relative(0.455)).h(px(213.))
         })
         .when(!side_by_side, |e| e.w_full().h(px(154.)))
         .rounded(radius)
@@ -1182,7 +1182,7 @@ fn readouts(
                     .min_w(px(0.))
                     .flex_1()
                     .gap(px(2.))
-                    .px(px(if narrow { 12. } else { 16. }))
+                    .px(px(if compact { 12. } else { 16. }))
                     .when(row == 0, |e| e.border_b_1())
                     .when(col == 0, |e| e.border_r_1())
                     .border_color(paint.line)
@@ -1190,12 +1190,18 @@ fn readouts(
                         div()
                             .text_size(px(12.))
                             .text_color(paint.faint)
+                            .whitespace_nowrap()
+                            .overflow_hidden()
+                            .text_ellipsis()
                             .child(labels[i].clone()),
                     )
                     .child(
                         div()
-                            .text_size(px(if narrow { 16. } else { 22. }))
+                            .text_size(px(if compact { 17. } else { 22. }))
                             .font_features(number_font())
+                            .whitespace_nowrap()
+                            .overflow_hidden()
+                            .text_ellipsis()
                             .child(values[i].clone()),
                     )
             }))
@@ -1238,12 +1244,21 @@ impl Render for ChargeSession {
         };
         let width = if self.measured.get() > px(0.) {
             f32::from(self.measured.get())
+        } else if w.viewport_size().width > px(0.) {
+            (f32::from(w.viewport_size().width) - 24.).clamp(210., 761.)
         } else {
-            f32::from(w.viewport_size().width).clamp(210., 761.)
+            640.
         };
         let narrow = width < 420.;
-        let side_by_side = width >= 640.;
-        let pad = if narrow { 16. } else { 32. };
+        let side_by_side = width >= 480.;
+        let compact_stats = width < 580.;
+        let pad = if narrow {
+            16.
+        } else if width < 560. {
+            20.
+        } else {
+            32.
+        };
         let content = (width - pad * 2. - 2.).max(1.);
         let pack = self.stage(content, stage, spoken.into(), cx);
         let plot = self.chart(stage, if side_by_side { 163. } else { 170. }, power, cx);
@@ -1263,7 +1278,7 @@ impl Render for ChargeSession {
             p,
             radius,
             side_by_side,
-            narrow,
+            compact_stats,
         );
         let action_ink = if state == Charging { p.ink } else { p.inverse };
         let button = face(
@@ -1313,7 +1328,13 @@ impl Render for ChargeSession {
             .flex_col()
             .child(
                 div()
-                    .h(px(if side_by_side { 94. } else { 72. }))
+                    .h(px(if width >= 600. {
+                        94.
+                    } else if side_by_side {
+                        80.
+                    } else {
+                        72.
+                    }))
                     .flex()
                     .justify_between()
                     .gap(px(12.))
@@ -1349,8 +1370,20 @@ impl Render for ChargeSession {
                             .items_end()
                             .child(
                                 div()
-                                    .text_size(px(if side_by_side { 72. } else { 44. }))
-                                    .line_height(px(if side_by_side { 72. } else { 46. }))
+                                    .text_size(px(if width >= 600. {
+                                        72.
+                                    } else if side_by_side {
+                                        56.
+                                    } else {
+                                        44.
+                                    }))
+                                    .line_height(px(if width >= 600. {
+                                        72.
+                                    } else if side_by_side {
+                                        58.
+                                    } else {
+                                        46.
+                                    }))
                                     .font_features(number_font())
                                     .child(format!("{:.0}%", detail.charge)),
                             )
@@ -1374,7 +1407,7 @@ impl Render for ChargeSession {
                     .mt(px(24.))
                     .w_full()
                     .flex()
-                    .gap(px(24.))
+                    .gap(px(if width < 560. { 16. } else { 24. }))
                     .when(!side_by_side, |e| e.flex_col())
                     .child(plot)
                     .child(stats),

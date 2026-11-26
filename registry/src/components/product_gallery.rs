@@ -878,12 +878,12 @@ impl ProductGallery {
     fn size_block(&mut self, width: f32, w: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let p = Paint::get(cx);
         let r = crate::foundation::surface_radius(cx);
-        let gap = if width < 420. { 4. } else { 8. };
+        let gap = if width < 420. { 3. } else { 6. };
         let count = self.sizes.len().max(1);
         let naturals: Vec<f32> = self
             .sizes
             .iter()
-            .map(|size| (measure(&size.label, 14., w) + 8.).clamp(38., width.max(38.)))
+            .map(|size| (measure(&size.label, 14., w) + 5.).clamp(34., width.max(34.)))
             .collect();
         let total_gaps = count.saturating_sub(1) as f32 * gap;
         let natural_sum: f32 = naturals.iter().sum();
