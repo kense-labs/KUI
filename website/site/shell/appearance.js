@@ -18,4 +18,10 @@
     root.style.setProperty("--custom-ink", .2126 * r + .7152 * g + .0722 * b > .179129 ? "#000" : "#fff");
   }
   if (accent) root.dataset.accent = accent;
+  addEventListener("pointerdown", () => { root.dataset.pointerFocus = "1"; }, { capture: true, passive: true });
+  addEventListener("keydown", e => {
+    if (e.key === "Tab" || e.key.startsWith("Arrow") || e.key === "Enter" || e.key === " ") {
+      delete root.dataset.pointerFocus;
+    }
+  }, { capture: true, passive: true });
 })();

@@ -1136,7 +1136,13 @@ impl AppShell {
         }
 
         // Bottom cards + account
-        let mut foot = div().mt_auto().pt(px(8.)).flex().flex_col().gap(px(8.));
+        let mut foot = div()
+            .flex_none()
+            .mt_auto()
+            .pt(px(8.))
+            .flex()
+            .flex_col()
+            .gap(px(8.));
         if self.side_cards && !collapsed {
             if self.news_count > 0 {
                 let mut stack = div().relative().flex().flex_col();
@@ -1144,29 +1150,12 @@ impl AppShell {
                     stack = stack.child(
                         div()
                             .mx(px(8.))
-                            .mb(px(-6.))
-                            .h(px(26.))
-                            .px(px(10.))
-                            .pt(px(6.))
-                            .rounded_t(px(10.))
+                            .h(px(6.))
+                            .rounded_t(px(8.))
                             .bg(p.card)
-                            .border_1()
-                            .border_color(p.line)
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_size(px(11.))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.blue.opacity(0.75))
-                                    .child(format!(
-                                        "{} {}",
-                                        tr(cx, "New in", "最新于"),
-                                        self.workspace
-                                    )),
-                            )
-                            .child(pro_icon(ProIcon::Close, 10., p.faint)),
+                            .border_t_1()
+                            .border_x_1()
+                            .border_color(p.line),
                     );
                 }
                 stack = stack.child(

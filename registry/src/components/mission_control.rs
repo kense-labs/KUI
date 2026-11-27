@@ -308,6 +308,53 @@ fn agent_hue(id: &str, p: &ProPalette) -> Hsla {
     }
 }
 
+fn mc_loc<'a>(raw: &'a str, cx: &App) -> &'a str {
+    if UiLanguage::current(cx) != UiLanguage::Chinese {
+        return raw;
+    }
+    match raw {
+        "Launch lead" => "发布负责人",
+        "Researcher" => "调研助手",
+        "Writer" => "文案撰写",
+        "Release" => "发布流水线",
+        "Support lead" => "客服负责人",
+        "Billing" => "账务专员",
+        "Ops" => "运维同步",
+        "Launch the new pricing page by Friday" => "周五前完成新版定价页上线",
+        "Compare Linear, Notion & Figma seat pricing" => "对比 Linear、Notion 与 Figma 席位定价",
+        "Draft the copy for Free, Pro and Team" => "起草免费版、专业版与团队版方案文案",
+        "Pick the Team plan seat price" => "确认团队版席位定价",
+        "Copy for Free ($0) and Pro ($12) is ready · choose Team pricing" => {
+            "免费版 ($0) 与专业版 ($12) 文案已就绪 · 请选择团队版单价"
+        }
+        "$20 / seat" => "$20 / 席位",
+        "$24 / seat" => "$24 / 席位",
+        "Merge & deploy pricing page PR #482" => "合并并部署定价页 PR #482",
+        "Deploy pricing page PR #482" => "部署定价页 PR #482",
+        "All 212 staging checks passed · waiting on production sign-off" => {
+            "预发环境全部 212 项检查已通过 · 等待生产发布签字确认"
+        }
+        "Answer the open tickets in the queue" => "自动跟进并回复待处理工单队列",
+        "Refund $240 to Acme Corp" => "向 Acme Corp 退还 $240 款项",
+        "Stripe live refund token expired (HTTP 401)" => "Stripe 生产环境退款令牌已过期 (HTTP 401)",
+        "Sync CRM contacts & rotate webhook keys" => "同步 CRM 联系人并轮换 Webhook 密钥",
+        "Compared seat prices across Linear, Notion & Figma" => {
+            "已完成 Linear、Notion 与 Figma 席位定价对比"
+        }
+        "Synced 1,240 CRM contacts to HubSpot" => "已同步 1,240 条 CRM 联系人至 HubSpot",
+        "Answered 24 support tickets in #help" => "已在 #help 频道解答 24 张支持工单",
+        "Refund $240 to Acme Corp failed (token expired)" => {
+            "向 Acme Corp 退款 $240 失败（令牌过期）"
+        }
+        "Writer asks: Team plan $20 or $24 per seat?" => {
+            "文案智能体询问：团队版定为 $20 还是 $24 / 席位？"
+        }
+        "Release asks: Approve PR #482 deploy" => "发布流水线请求：批准部署 PR #482",
+        "Verified Stripe webhook signatures on staging" => "已在预发环境验证 Stripe Webhook 签名",
+        _ => raw,
+    }
+}
+
 fn default_mission_agents() -> Vec<MissionAgent> {
     // 7 agents total: 3 Running (Launch lead, Support lead, Ops), 1 Done (Researcher),
     // 2 Waiting (Writer, Release), 1 Failed (Billing) => All 7 | Running 3 | Needs you 3 | Failed 1
@@ -1389,7 +1436,9 @@ impl MissionControlBlock {
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.strong)
                                         .truncate()
-                                        .child(lead.name.clone()),
+                                        .child(SharedString::from(
+                                            mc_loc(&lead.name, cx).to_owned(),
+                                        )),
                                 )
                                 .child(
                                     div()
@@ -1414,7 +1463,7 @@ impl MissionControlBlock {
                                 .text_size(px(12.))
                                 .text_color(p.text)
                                 .truncate()
-                                .child(lead.task.clone()),
+                                .child(SharedString::from(mc_loc(&lead.task, cx).to_owned())),
                         )
                         .child(build_tools_strip(&lead.tools, cx)),
                 )
@@ -1556,6 +1605,55 @@ impl MissionControlBlock {
                     w,
                     cx,
                 ));
+            }
+            if open_children.len() <= 1
+                && let Some(active_lead) = visible_leads.iter().find(|l| l.id == self.open_lead)
+            {
+                let hidden_siblings = active_lead
+                    .children
+                    .len()
+                    .saturating_sub(open_children.len());
+                let note = if hidden_siblings > 0 {
+                    if UiLanguage::current(cx) == UiLanguage::Chinese {
+                        format!("另有 {hidden_siblings} 个关联子智能体在「全部」视图中运行或已完成")
+                    } else {
+                        format!(
+                            "{hidden_siblings} additional sub-agent{} active in All view",
+                            if hidden_siblings == 1 { "" } else { "s" }
+                        )
+                    }
+                } else if active_lead.id.as_ref() == "support" {
+                    tr(
+                        cx,
+                        "Slack #help & Gmail queue monitored · 24 tickets auto-resolved",
+                        "持续监听 Slack #help 与 Gmail 队列 · 已自动闭环 24 张工单",
+                    )
+                    .to_owned()
+                } else {
+                    tr(
+                        cx,
+                        "Direct execution stream · telemetry & tool logs healthy",
+                        "独立执行工作流 · 工具调用与实时遥测状态正常",
+                    )
+                    .to_owned()
+                };
+                subs_col = subs_col.child(
+                    div()
+                        .w_full()
+                        .rounded(px(9.))
+                        .border_1()
+                        .border_color(p.line)
+                        .bg(p.card)
+                        .px(px(10.))
+                        .py(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(7.))
+                        .text_size(px(11.))
+                        .text_color(p.muted)
+                        .child(div().size(px(5.)).rounded_full().bg(p.blue.opacity(0.65)))
+                        .child(div().flex_1().min_w_0().truncate().child(note)),
+                );
             }
 
             // Paint orthogonal rounded connectors with traveling light pulse via pro_connector_pulse
@@ -1847,7 +1945,7 @@ impl MissionControlBlock {
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.strong)
                                     .truncate()
-                                    .child(sub.name.clone()),
+                                    .child(SharedString::from(mc_loc(&sub.name, cx).to_owned())),
                             )
                             .child(
                                 div()
@@ -1874,7 +1972,7 @@ impl MissionControlBlock {
                             .text_size(px(11.5))
                             .text_color(p.text)
                             .truncate()
-                            .child(sub.task.clone()),
+                            .child(SharedString::from(mc_loc(&sub.task, cx).to_owned())),
                     ),
             )
             .child(
@@ -2012,17 +2110,25 @@ impl MissionControlBlock {
                 let hov_t = hov_st.update(cx, |s, cx| s.get(w, cx).clamp(0., 1.));
                 let is_failed = ag.status == MissionAgentStatus::Failed;
 
-                let (headline, desc) = if is_failed {
-                    (
-                        ag.task.clone(),
+                let (headline, desc): (SharedString, SharedString) = if is_failed {
+                    let err_raw =
                         ag.error
-                            .clone()
-                            .unwrap_or_else(|| SharedString::from("Execution failed")),
+                            .as_deref()
+                            .unwrap_or(tr(cx, "Execution failed", "执行失败"));
+                    (
+                        mc_loc(&ag.task, cx).to_owned().into(),
+                        mc_loc(err_raw, cx).to_owned().into(),
                     )
                 } else if let Some(ask) = &ag.ask {
-                    (ask.title.clone(), ask.detail.clone())
+                    (
+                        mc_loc(&ask.title, cx).to_owned().into(),
+                        mc_loc(&ask.detail, cx).to_owned().into(),
+                    )
                 } else {
-                    (ag.task.clone(), "Waiting on your confirmation".into())
+                    (
+                        mc_loc(&ag.task, cx).to_owned().into(),
+                        tr(cx, "Waiting on your confirmation", "等待你的确认").into(),
+                    )
                 };
 
                 let actions_row = if is_failed {
@@ -2065,10 +2171,11 @@ impl MissionControlBlock {
                     for (ci, choice) in ask.choices.iter().enumerate() {
                         let aid_ch = aid.clone();
                         let ch_val = choice.clone();
+                        let ch_lbl: SharedString = mc_loc(choice, cx).to_owned().into();
                         let is_primary = ci + 1 == ask.choices.len();
                         row = row.child(quiet_pill(
                             pro_eid(&self.id, format!("inb-ans-{aid}-{ci}")),
-                            ch_val.clone(),
+                            ch_lbl,
                             is_primary,
                             hov_t,
                             cx,
@@ -2361,7 +2468,12 @@ impl RenderOnce for RecapScrubTooltip {
                     .items_center()
                     .gap(px(6.))
                     .child(div().opacity(0.68).child(ev.at_label))
-                    .child(div().min_w_0().truncate().child(ev.title)),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .child(SharedString::from(mc_loc(&ev.title, cx).to_owned())),
+                    ),
             )
             .into_any_element()
     }

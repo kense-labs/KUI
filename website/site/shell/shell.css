@@ -122,6 +122,19 @@ pre {
   outline-offset: 2px;
 }
 
+:focus:not(:focus-visible),
+html[data-pointer-focus] :is(*:focus, *:focus-visible),
+iframe,
+iframe:focus,
+iframe:focus-visible,
+canvas,
+canvas:focus,
+canvas:focus-visible,
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible {
+  outline: none !important;
+}
+
 .wrap {
   width: min(960px, calc(100% - 2rem));
   margin-inline: auto;
@@ -377,8 +390,9 @@ html.is-client-nav .motion-fade-up-delay-3 {
   top: 0;
   z-index: 40;
   border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in oklab, var(--bg) 96%, transparent);
+  background: color-mix(in oklab, var(--bg) 97%, transparent);
   backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 .topbar .inner {
   display: flex;

@@ -368,15 +368,123 @@ impl ToneSampleScenario {
         }
     }
 
-    fn question(self) -> &'static str {
+    fn question(self, cx: &App) -> &'static str {
         match self {
-            Self::Plan => "Can I change my plan mid-month?",
-            Self::Refund => "How do refunds work if we cancel?",
-            Self::Security => "Where is our workspace data stored?",
+            Self::Plan => tr(
+                cx,
+                "Can I change my plan mid-month?",
+                "月中可以随时更换套餐吗？",
+            ),
+            Self::Refund => tr(
+                cx,
+                "How do refunds work if we cancel?",
+                "如果取消订阅，退款怎么计算？",
+            ),
+            Self::Security => tr(
+                cx,
+                "Where is our workspace data stored?",
+                "我们的工作区数据存储在哪里？",
+            ),
         }
     }
 
-    fn reply(self, tone: OnboardingToneVoice, length: OnboardingReplyLength) -> &'static str {
+    fn reply(
+        self,
+        tone: OnboardingToneVoice,
+        length: OnboardingReplyLength,
+        cx: &App,
+    ) -> &'static str {
+        if tr(cx, "en", "zh") == "zh" {
+            return match self {
+                Self::Plan => match (tone, length) {
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Short) => {
+                        "当然可以！随时切换套餐，剩余天数会自动折算差价。"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Balanced) => {
+                        "没问题！您可以随时切换订阅套餐，当月剩余天数的差价系统会自动按比例折算。"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Detailed) => {
+                        "非常乐意为您解答！您随时可在「账单设置」中升级或变更套餐，升级立即生效，剩余周期费用会自动按天折算。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Short) => {
+                        "可以，随时可变更套餐并按天折算差价。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Balanced) => {
+                        "可以。您可以随时调整当前套餐，剩余周期的费用差额将按比例自动折算。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Detailed) => {
+                        "可以。您可随时在「账单设置」中升级或降级套餐，变更立即生效，当前计费周期剩余天数会自动折算。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Short) => {
+                        "支持变更，套餐调整即时生效并按比例折算。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Balanced) => {
+                        "您好，计费周期内可随时变更订阅等级，相关费用将按剩余天数依比例折算调整。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Detailed) => {
+                        "您好，您可随时前往「账单设置」调整订阅方案；方案变更即时生效，差额将依据剩余账期按比例精确核算。"
+                    }
+                },
+                Self::Refund => match (tone, length) {
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Short) => {
+                        "随时可取消！年付未使用的天数会在 5 个工作日内原路退回。"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Balanced) => {
+                        "没有任何绑定限制！您随时可在账单页取消，年付方案的未使用余额会自动退还。"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Detailed) => {
+                        "请放心！在「账单设置」一键即可取消订阅：月付方案将在当期结束停止续费，年付未使用天数将在 5 个工作日内退回。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Short) => {
+                        "可随时取消；年付剩余未用额度按比例退还。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Balanced) => {
+                        "您可随时在账单设置中取消订阅，年付未使用的周期余额将在 5 个工作日内退回。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Detailed) => {
+                        "可随时在「账单设置」取消订阅。月付方案于当期结束终止；年付方案按剩余天数折算并在 5 个工作日内原路退款。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Short) => {
+                        "支持按周期终止订阅，年付结余按比例退还。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Balanced) => {
+                        "您可通过「账单设置」终止订阅服务；年付方案中未履约周期将按比例核算退回。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Detailed) => {
+                        "您可随时于「账单设置」提交终止申请。符合条件的年付按比例退款将在五个工作日内原路退回付款账户。"
+                    }
+                },
+                Self::Security => match (tone, length) {
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Short) => {
+                        "全程加密存储于独立区域，通过 SOC 2 认证，绝不用于模型训练！"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Balanced) => {
+                        "您的数据在所选区域内全程静态与传输加密，并且我们承诺绝不将客户数据用于模型训练。"
+                    }
+                    (OnboardingToneVoice::Friendly, OnboardingReplyLength::Detailed) => {
+                        "非常好的问题！工作区数据采用 AES-256 加密存储于指定区域，已通过 SOC 2 Type II 审计，且执行零训练留存策略。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Short) => {
+                        "在指定区域加密存储，已通过 SOC 2 Type II 认证。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Balanced) => {
+                        "数据在您选择的区域内受 SOC 2 Type II 安全管控与全程加密保护，零训练留存。"
+                    }
+                    (OnboardingToneVoice::Neutral, OnboardingReplyLength::Detailed) => {
+                        "工作区数据采用 AES-256 静态加密与 TLS 1.3 传输加密存储于选定区域，符合 SOC 2 Type II 标准且不用于模型训练。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Short) => {
+                        "数据托管于通过 SOC 2 Type II 审计的隔离加密区域。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Balanced) => {
+                        "所有客户记录均托管于隔离合规区域，受 AES-256 加密与 SOC 2 Type II 内控体系保护。"
+                    }
+                    (OnboardingToneVoice::Formal, OnboardingReplyLength::Detailed) => {
+                        "客户数据托管于专属合规区域，严格执行静态 AES-256 加密、传输 TLS 1.3 加密及模型零数据留存策略。"
+                    }
+                },
+            };
+        }
         match self {
             Self::Plan => sample_test_reply(tone, length),
             Self::Refund => match (tone, length) {
@@ -1081,7 +1189,7 @@ impl OnboardingToneScreen {
             .gap(px(22.))
             .child(ws_row);
 
-        for group in SIDE_NAV_GROUPS {
+        for group in SIDE_NAV_GROUPS.into_iter().chain(SIDE_NAV_GROUPS) {
             let mut nav = div()
                 .flex()
                 .flex_col()
@@ -1202,9 +1310,15 @@ impl OnboardingToneScreen {
                             .text_size(px(13.))
                             .line_height(px(20.))
                             .text_color(pal.ink)
-                            .child(format!(
-                                "Hi, I'm {display_name} – ask me anything about our products, plans or your account."
-                            )),
+                            .child(if tr(cx, "en", "zh") == "zh" {
+                                format!(
+                                    "你好，我是 {display_name}，欢迎随时咨询产品功能、订阅套餐或账户问题。"
+                                )
+                            } else {
+                                format!(
+                                    "Hi, I'm {display_name} – ask me anything about our products, plans or your account."
+                                )
+                            }),
                     ),
             )
             .child(aka_row);
@@ -1213,8 +1327,8 @@ impl OnboardingToneScreen {
         let knowledge_card = render_knowledge_table(&host, &initial, pal, cx);
 
         // Live Test chat card (.ui-obw-chat) — front and center at offset_y = -946px!
-        let question_text = self.scenario.question();
-        let reply_text = self.scenario.reply(self.tone, self.length);
+        let question_text = self.scenario.question(cx);
+        let reply_text = self.scenario.reply(self.tone, self.length, cx);
         let reply_tx_key: SharedString = format!(
             "{}-{}-{}",
             self.tone.as_str(),
@@ -1516,7 +1630,7 @@ impl OnboardingToneScreen {
             .top(px(56.))
             .bottom_0()
             .left(px(preview_w))
-            .w(px((preview_w * 1.4).max(1088.)))
+            .right_0()
             .pl(px(8.))
             .overflow_hidden()
             .child(div().mt(px(24. + offset_y)).w_full().child(win))
@@ -2135,10 +2249,10 @@ impl OnboardingToneScreen {
             .child(
                 div()
                     .w_full()
-                    .mt(px(28.))
+                    .mt(px(22.))
                     .flex()
                     .flex_col()
-                    .gap(px(18.))
+                    .gap(px(14.))
                     .text_left()
                     .child(name_field)
                     .child(tone_field)
@@ -2171,8 +2285,8 @@ impl Render for OnboardingToneScreen {
 
         let container_w = self.measured_width.get();
         let narrow = container_w < 740.;
-        let compact_side = container_w <= 1040.;
-        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let compact_side = container_w <= 1120.;
+        let split_ratio = if container_w < 1040. { 0.48 } else { 0.50 };
         let left_pad = if narrow {
             20.
         } else if container_w < 980. {

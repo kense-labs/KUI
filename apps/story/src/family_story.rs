@@ -1030,6 +1030,8 @@ impl Render for FamilyStory {
             ("generation-stats", false) => (520., Some(152.)),
             ("generation-stats", true) => (520., Some(55.)),
             ("reasoning-block", _) => (670., Some(52.)),
+            ("provider-keys", true) => (862., None),
+            ("provider-keys", false) => (776., None),
             ("json-viewer", _) => (646., None),
             ("theme-switch", _) => (220., None),
             ("user-menu", _) => (626., None),
@@ -1072,10 +1074,6 @@ impl Render for FamilyStory {
             .when(self.id == "shortcut-recorder", |el| {
                 el.p(px(if narrow { 16. } else { 24. }))
                     .when(vw < 620., |el| el.justify_start())
-            })
-            .when(self.id == "provider-keys", |el| {
-                // The editor expands below the active row. Keep the header anchored.
-                el.min_h(px(0.))
             });
         if let Some((ev, old, slide)) = &self.transition {
             let duration = match ev.mode {

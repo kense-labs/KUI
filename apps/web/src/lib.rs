@@ -235,7 +235,7 @@ mod web {
         }
         export function previewMinHeight() {
             const frame = window.frameElement;
-            if (frame?.closest('[data-preview-size=mobile]')) return 844;
+            if (frame?.closest('[data-preview-size=mobile]')) return 680;
             if (frame?.closest('[data-preview-expanded]')) return Math.max(0, parent.innerHeight - 50);
             return 0;
         }

@@ -1103,7 +1103,11 @@ impl OnboardingBrandScreen {
                                     .bg(user_bubble_bg)
                                     .text_color(user_bubble_fg)
                                     .text_size(px(12.5))
-                                    .child(format!("Does {alias_ref} include team SSO?")),
+                                    .child(if tr(cx, "en", "zh") == "zh" {
+                                        format!("{alias_ref} 包含团队单点登录 SSO 吗？")
+                                    } else {
+                                        format!("Does {alias_ref} include team SSO?")
+                                    }),
                             ),
                     )
                     .child(
@@ -1131,9 +1135,11 @@ impl OnboardingBrandScreen {
                                     .text_size(px(12.5))
                                     .line_height(px(18.))
                                     .text_color(pal.ink)
-                                    .child(format!(
-                                        "Yes — {brand_display} Business includes SAML SSO and SCIM out of the box."
-                                    )),
+                                    .child(if tr(cx, "en", "zh") == "zh" {
+                                        format!("{brand_display} 商业版默认内置 SAML SSO 与 SCIM 目录同步。")
+                                    } else {
+                                        format!("Yes — {brand_display} Business includes SAML SSO and SCIM out of the box.")
+                                    }),
                             ),
                     )
                     .child(aka_row)
@@ -1202,10 +1208,17 @@ impl OnboardingBrandScreen {
                             .text_size(px(12.5))
                             .line_height(px(18.))
                             .text_color(pal.ink)
-                            .child(format!(
-                                "Here is a summary from the {brand_display} assistant, plus links from {}.",
-                                self.domain
-                            )),
+                            .child(if tr(cx, "en", "zh") == "zh" {
+                                format!(
+                                    "以下是来自 {brand_display} 助手的会话摘要，并附带 {} 参考链接。",
+                                    self.domain
+                                )
+                            } else {
+                                format!(
+                                    "Here is a summary from the {brand_display} assistant, plus links from {}.",
+                                    self.domain
+                                )
+                            }),
                     )
                     .child(aka_row)
             }
@@ -1373,7 +1386,7 @@ impl OnboardingBrandScreen {
             .top(px(56.))
             .bottom_0()
             .left(px(preview_w))
-            .w(px((preview_w * 1.4).max(1088.)))
+            .right_0()
             .pl(px(8.))
             .overflow_hidden()
             .child(div().mt(px(24. + offset_y)).w_full().child(win))
@@ -2144,8 +2157,8 @@ impl Render for OnboardingBrandScreen {
 
         let container_w = self.measured_width.get();
         let narrow = container_w < 740.;
-        let compact_side = container_w <= 1040.;
-        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let compact_side = container_w <= 1120.;
+        let split_ratio = if container_w < 1040. { 0.48 } else { 0.50 };
         let left_pad = if narrow {
             20.
         } else if container_w < 980. {

@@ -1380,10 +1380,10 @@ impl FunnelChart {
         for seg in &self.segments {
             labels.push(seg.label.clone());
         }
-        let text_run = w.text_style().to_run(8);
         let widths: Vec<f32> = labels
             .iter()
             .map(|label| {
+                let text_run = w.text_style().to_run(label.len());
                 f32::from(
                     w.text_system()
                         .shape_line(
@@ -1684,5 +1684,50 @@ mod tests {
         let prev = stages[0].value_f64(None);
         let now = stages[1].value_f64(None);
         assert_eq!(((1. - now / prev) * 100.).round() as u32, 39);
+    }
+    #[gpui::test]
+    fn funnel_chart_shapes_multibyte_and_short_labels_with_font_fallbacks(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use crate::primitives::control::UiLanguage;
+        use gpui::{Bounds, FontFallbacks, WindowBounds, WindowOptions, div, prelude::*, px, size};
+        cx.update(|cx| {
+            crate::foundation::init(cx);
+            cx.set_global(UiLanguage::Chinese);
+        });
+        let win = cx.add_window(|_, cx| {
+            let segments = vec![
+                super::FunnelSegment::new("m", "端"),
+                super::FunnelSegment::new("desktop", "Desktop Application"),
+            ];
+            let stages = vec![
+                FunnelStage::new("visit", "访问", vec![600.0, 400.0]),
+                FunnelStage::new("buy", "转化", vec![120.0, 80.0]),
+            ];
+            let chart = cx.new(|cx| super::FunnelChart::new("转化漏斗", stages, segments, cx));
+            struct FallbackHost(gpui::Entity<super::FunnelChart>);
+            impl gpui::Render for FallbackHost {
+                fn render(
+                    &mut self,
+                    _: &mut gpui::Window,
+                    _: &mut gpui::Context<Self>,
+                ) -> impl gpui::IntoElement {
+                    let mut root = div().size_full().child(self.0.clone());
+                    root.text_style().font_fallbacks =
+                        Some(FontFallbacks::from_fonts(vec!["KUI Input Sans".into()]));
+                    root
+                }
+            }
+            FallbackHost(chart)
+        });
+        let _ = win;
+        cx.run_until_parked();
+        let _ = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Default::default(),
+                size: size(px(894.), px(520.)),
+            })),
+            ..Default::default()
+        };
     }
 }

@@ -402,6 +402,9 @@ function show(story, lang) {
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   if (!running) return;
   if (mounted?.story === story && mounted?.lang === lang) return;
+  ++paintRevision;
+  paintedStory = undefined;
+  if (frame) delete frame.dataset.renderedStory;
   if (frame && themeMode(story)) set_icon_intent(dark);
   if (show_story(story, lang === "zh")) {
     delete document.documentElement.dataset.previewError;
@@ -443,8 +446,9 @@ function preferences(nextDark, nextReduced, waitForPaint = true) {
   return new Promise(resolve => waiters.add(resolve));
 }
 
-// GPUI calls this during prepaint. The microtask runs after the draw and
-// presentation callback returns, before the browser composites the next frame.
+// GPUI calls this during prepaint. When the preview height changes, defer the
+// iframe style mutation to a macrotask after presentation so WebKit never has
+// its active GPU surface invalidated mid-frame.
 window.kuiFramePainted = (height, renderedDark) => {
   // This hook runs during scene prepaint; controls register their current regions
   // during the following paint, so geometry from previous frames cannot linger.
@@ -453,16 +457,26 @@ window.kuiFramePainted = (height, renderedDark) => {
   ticketRegion = undefined;
   if (document.documentElement.dataset.previewError) return;
   const nextHeight = frame && height > 0 && frame.classList.contains("rust-story") ? height + "px" : "";
-  const resize = nextHeight && frame.style.height !== nextHeight;
-  if (!picturePending && !resize && renderedDark === paintedDark && mounted === paintedStory && !waiters.size) return;
+  const styleDiffers = Boolean(nextHeight && frame.style.height !== nextHeight);
+  const geomDiffers = Boolean(nextHeight && Math.abs(frame.getBoundingClientRect().height - height) > 0.5);
+  const needsResize = styleDiffers && geomDiffers;
+  if (!picturePending && !styleDiffers && renderedDark === paintedDark && mounted === paintedStory && !waiters.size) return;
   const revision = paintRevision;
   const story = mounted;
+  if (needsResize) {
+    requestAnimationFrame(() => {
+      if (revision !== paintRevision || story !== mounted || document.documentElement.dataset.previewError) return;
+      if (frame && frame.style.height !== nextHeight) {
+        frame.style.height = nextHeight;
+      }
+      if (running) request_snapshot();
+    });
+    return;
+  }
   queueMicrotask(() => {
     if (revision !== paintRevision || renderedDark !== dark || story !== mounted || document.documentElement.dataset.previewError) return;
     if (picturePending) capturePicture();
-    // Resize after presentation. Changing the iframe viewport during prepaint
-    // can invalidate WebKit's active GPU surface.
-    if (resize && frame.style.height !== nextHeight) frame.style.height = nextHeight;
+    if (styleDiffers && frame.style.height !== nextHeight) frame.style.height = nextHeight;
     paintedDark = renderedDark;
     paintedStory = story;
     status.hidden = true;

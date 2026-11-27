@@ -2636,7 +2636,7 @@ impl KanbanScreen {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let p = ProPalette::get(cx);
-        let tight_board = w_px < 860.;
+        let tight_board = w_px < 960.;
         let frame_bg: Hsla = if p.dark {
             hsla(0., 0., 1., 0.03)
         } else {
@@ -2654,8 +2654,8 @@ impl KanbanScreen {
             .cloned()
             .collect();
 
-        let col_min_w = if visible_cols.len() >= 4 && (560. ..880.).contains(&w_px) {
-            148.
+        let col_min_w = if visible_cols.len() >= 4 && (560. ..1020.).contains(&w_px) {
+            146.
         } else if w_px < 780. {
             176.
         } else {

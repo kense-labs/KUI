@@ -44,6 +44,8 @@ impl StoryHost {
             return false;
         };
         self.selected = Some(view);
+        w.bounds_changed(cx);
+        w.refresh();
         cx.notify();
         true
     }

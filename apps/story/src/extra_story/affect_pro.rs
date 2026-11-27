@@ -140,7 +140,8 @@ impl Render for AffectProStage {
         if self.full_block {
             div()
                 .w_full()
-                .flex_1()
+                .min_h(px(520.))
+                .flex_grow(1.)
                 .bg(stage_bg)
                 .flex()
                 .flex_col()
@@ -152,7 +153,8 @@ impl Render for AffectProStage {
             let py_pad = if narrow { 20. } else { 44. };
             div()
                 .w_full()
-                .flex_1()
+                .min_h(px(520.))
+                .flex_grow(1.)
                 .bg(stage_bg)
                 .px(px(px_pad))
                 .py(px(py_pad))

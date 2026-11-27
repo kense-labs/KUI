@@ -2,7 +2,7 @@
 use gpui::{prelude::*, *};
 use kui::{components::gradient_floor::GradientFloor, foundation::Theme};
 
-pub const PREVIEW_HEIGHT: f32 = 896.;
+pub const PREVIEW_HEIGHT: f32 = 760.;
 pub const FLOOR_PREVIEW_HEIGHT: f32 = 408.;
 
 pub const IDS: &[&str] = &[

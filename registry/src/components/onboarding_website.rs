@@ -1603,7 +1603,11 @@ impl OnboardingWebsiteScreen {
                                     .border_color(t.line)
                                     .text_size(px(13.))
                                     .text_color(t.ink)
-                                    .child("Can I change my plan mid-month?"),
+                                    .child(tr(
+                                        cx,
+                                        "Can I change my plan mid-month?",
+                                        "月中可以随时更换套餐吗？",
+                                    )),
                             ),
                     )
                     // Assistant answer
@@ -1653,9 +1657,11 @@ impl OnboardingWebsiteScreen {
                                             .text_size(px(13.))
                                             .line_height(px(19.))
                                             .text_color(t.ink)
-                                            .child(
+                                            .child(tr(
+                                                cx,
                                                 "Yes. You can change your plan at any time; the difference is prorated.",
-                                            ),
+                                                "可以的，您可以随时变更套餐，剩余周期差价会自动按天数折算。",
+                                            )),
                                     ),
                             ),
                     )
@@ -1672,7 +1678,11 @@ impl OnboardingWebsiteScreen {
                             .child(
                                 div()
                                     .text_color(t.muted)
-                                    .child("It answers everything itself"),
+                                    .child(tr(
+                                        cx,
+                                        "It answers everything itself",
+                                        "所有问题均由助手独立解答",
+                                    )),
                             )
                             .when_some(cite_domain, |d, dom| {
                                 d.child(
@@ -1764,13 +1774,13 @@ impl OnboardingWebsiteScreen {
             .child(side_col)
             .child(body_col);
 
-        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let split_ratio = if container_w < 1040. { 0.48 } else { 0.50 };
         div()
             .absolute()
             .top(px(56.))
             .bottom_0()
             .left(px((container_w * split_ratio).round()))
-            .w(px(1088.))
+            .right_0()
             .pt(px(24.))
             .pl(px(8.))
             .overflow_hidden()
@@ -1869,7 +1879,7 @@ impl Render for OnboardingWebsiteScreen {
         let measure_cell = self.measured_width.clone();
         let container_w = measure_cell.get();
         let narrow = container_w < 740.;
-        let split_ratio = if container_w < 1040. { 0.56 } else { 0.50 };
+        let split_ratio = if container_w < 1040. { 0.48 } else { 0.50 };
         let left_pad = if container_w < 980. { 24. } else { 40. };
 
         // Top 56px bar: clean geometric product mark + product name, optional Back, account + Log out
