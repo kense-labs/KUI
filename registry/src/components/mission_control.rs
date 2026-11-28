@@ -16,7 +16,7 @@ use crate::{
     primitives::{
         control::UiLanguage,
         family::{Slide, disabled_motion},
-        pro_icons::{ProIcon, pro_icon, pro_svg},
+        pro_icons::{ProIcon, pro_svg},
     },
 };
 use gpui::{prelude::*, *};
@@ -295,17 +295,8 @@ fn mutate_agent(
     false
 }
 
-fn agent_hue(id: &str, p: &ProPalette) -> Hsla {
-    match id {
-        "launch" => p.blue,
-        "research" => p.purple,
-        "writer" => p.teal,
-        "release" => p.cyan,
-        "support" => p.green,
-        "billing" => p.red,
-        "ops" => p.orange,
-        _ => p.blue,
-    }
+fn agent_hue(_id: &str, p: &ProPalette) -> Hsla {
+    p.ink.opacity(0.76)
 }
 
 fn mc_loc<'a>(raw: &'a str, cx: &App) -> &'a str {
@@ -337,7 +328,7 @@ fn mc_loc<'a>(raw: &'a str, cx: &App) -> &'a str {
         "Answer the open tickets in the queue" => "自动跟进并回复待处理工单队列",
         "Refund $240 to Acme Corp" => "向 Acme Corp 退还 $240 款项",
         "Stripe live refund token expired (HTTP 401)" => "Stripe 生产环境退款令牌已过期 (HTTP 401)",
-        "Sync CRM contacts & rotate webhook keys" => "同步 CRM 联系人并轮换 Webhook 密钥",
+        "Sync CRM contacts & rotate webhook keys" => "同步 CRM 联系人并轮换密钥",
         "Compared seat prices across Linear, Notion & Figma" => {
             "已完成 Linear、Notion 与 Figma 席位定价对比"
         }
@@ -1237,34 +1228,38 @@ impl MissionControlBlock {
 
     fn render_status_pill(&self, agent_id: &str, status: MissionAgentStatus, cx: &App) -> Div {
         let p = ProPalette::get(cx);
-        let (bg, fg, label) = match status {
-            MissionAgentStatus::Running => (p.accent_soft, p.blue, tr(cx, "Running", "运行中")),
-            MissionAgentStatus::Waiting => {
-                (p.amber_soft, p.amber_ink, tr(cx, "Needs you", "待确认"))
-            }
-            MissionAgentStatus::Failed => (p.red_soft, p.red_ink, tr(cx, "Failed", "失败")),
-            MissionAgentStatus::Done => (p.green_soft, p.green_ink, tr(cx, "Done", "已完成")),
+        let (dot_col, fg, label) = match status {
+            MissionAgentStatus::Running => (p.blue, p.text, tr(cx, "Running", "运行中")),
+            MissionAgentStatus::Waiting => (p.amber, p.text, tr(cx, "Needs you", "待确认")),
+            MissionAgentStatus::Failed => (p.red, p.red_ink, tr(cx, "Failed", "失败")),
+            MissionAgentStatus::Done => (p.green, p.muted, tr(cx, "Done", "已完成")),
         };
         let indicator: AnyElement = if status == MissionAgentStatus::Done {
             pro_check_draw(
                 pro_eid(&self.id, format!("mc-st-chk-{agent_id}")),
                 true,
-                12.,
+                11.5,
                 false,
-                fg,
+                dot_col,
             )
         } else {
-            div().size(px(5.)).rounded_full().bg(fg).into_any_element()
+            div()
+                .size(px(5.))
+                .rounded_full()
+                .bg(dot_col)
+                .into_any_element()
         };
         div()
-            .h(px(18.))
-            .px(px(6.))
-            .rounded(px(4.))
-            .bg(bg)
+            .h(px(19.))
+            .px(px(7.))
+            .rounded(px(999.))
+            .bg(p.chip)
+            .border_1()
+            .border_color(p.line)
             .flex_none()
             .flex()
             .items_center()
-            .gap(px(4.))
+            .gap(px(4.5))
             .child(indicator)
             .child(pro_swap_label(
                 pro_eid(&self.id, format!("mc-st-lbl-{agent_id}")),
@@ -1416,14 +1411,7 @@ impl MissionControlBlock {
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .child(pro_agent_avatar(
-                            &lead_seed,
-                            col,
-                            22.,
-                            lead.status == MissionAgentStatus::Running,
-                            elapsed_ms,
-                            cx,
-                        ))
+                        .child(pro_agent_avatar(&lead_seed, col, 22., false, 0.0, cx))
                         .child(
                             div()
                                 .flex_1()
@@ -1656,33 +1644,28 @@ impl MissionControlBlock {
                 );
             }
 
-            // Paint orthogonal rounded connectors with traveling light pulse via pro_connector_pulse
-            let base_link = p.blue.opacity(0.36);
-            let pulse_link = p.blue;
+            // Paint crisp orthogonal rounded connectors between lead and sub-agent cards
+            let base_link = p.line_strong;
+            let pulse_link = p.ink.opacity(0.45);
             let card_bg = p.card;
-            let reduced = disabled_motion(cx);
+            let _ = (pulse_t, elapsed_ms);
             let connector_layer = canvas(
                 |_, _, _| (),
                 move |_, _, window, _| {
                     let Some(p0) = lead_anchor.get() else {
                         return;
                     };
-                    for (idx, (cell, live)) in sub_anchors.iter().enumerate() {
+                    for (cell, _live) in &sub_anchors {
                         let Some(p1) = cell.get() else {
                             continue;
                         };
-                        let prog = if *live && !reduced {
-                            Some((pulse_t + idx as f32 * 0.28).fract())
-                        } else {
-                            None
-                        };
                         pro_connector_pulse(
-                            p0, p1, 8.0, false, base_link, pulse_link, prog, 1.5, window,
+                            p0, p1, 8.0, false, base_link, pulse_link, None, 1.25, window,
                         );
                     }
                     if !sub_anchors.is_empty() {
-                        let r_out = px(3.8);
-                        let r_in = px(2.4);
+                        let r_out = px(3.5);
+                        let r_in = px(2.1);
                         window.paint_quad(
                             fill(
                                 Bounds::new(p0 - point(r_out, r_out), size(r_out * 2., r_out * 2.)),
@@ -1748,8 +1731,8 @@ impl MissionControlBlock {
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(8.))
-                            .child(pro_icon(ProIcon::Sparkles, 14., p.blue))
+                            .gap(px(7.))
+                            .child(div().size(px(6.)).rounded_full().bg(p.ink.opacity(0.65)))
                             .child(
                                 div()
                                     .text_size(px(13.))
@@ -1924,14 +1907,10 @@ impl MissionControlBlock {
                     .flex()
                     .items_center()
                     .gap(px(7.))
-                    .child(pro_agent_avatar(
-                        &sub_seed,
-                        col,
-                        20.,
-                        sub.status == MissionAgentStatus::Running,
-                        elapsed_ms,
-                        cx,
-                    ))
+                    .child({
+                        let _ = elapsed_ms;
+                        pro_agent_avatar(&sub_seed, col, 20., false, 0.0, cx)
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -2275,7 +2254,11 @@ impl MissionControlBlock {
                                 .flex()
                                 .items_center()
                                 .gap(px(6.))
-                                .child(pro_icon(ProIcon::Sparkles, 12., p.amber))
+                                .child(div().size(px(5.)).rounded_full().bg(if is_failed {
+                                    p.red
+                                } else {
+                                    p.amber
+                                }))
                                 .child(
                                     div()
                                         .flex_1()
@@ -2289,7 +2272,7 @@ impl MissionControlBlock {
                         )
                         .child(
                             div()
-                                .pl(px(18.))
+                                .pl(px(11.))
                                 .text_size(px(11.5))
                                 .line_height(px(16.))
                                 .text_color(p.muted)
@@ -2297,7 +2280,7 @@ impl MissionControlBlock {
                         )
                         .child(
                             div()
-                                .pl(px(18.))
+                                .pl(px(11.))
                                 .pt(px(1.))
                                 .flex()
                                 .flex_wrap()
@@ -2329,13 +2312,13 @@ impl MissionControlBlock {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(pro_icon(ProIcon::Sparkles, 12.5, p.blue))
+                    .child(div().size(px(5.5)).rounded_full().bg(p.amber))
                     .child(
                         div()
-                            .text_size(px(11.))
+                            .text_size(px(11.5))
                             .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.muted)
-                            .child(tr(cx, "NEEDS YOU", "待你处理")),
+                            .text_color(p.strong)
+                            .child(tr(cx, "Needs you", "待你处理")),
                     )
                     .child(
                         div()
@@ -2483,8 +2466,7 @@ impl Render for MissionControlBlock {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = ProPalette::get(cx);
         let reduced = disabled_motion(cx);
-        let has_running = count_mission_agents(&self.agents, MissionFilter::Running) > 0;
-        if (has_running || self.loading) && !reduced {
+        if self.loading && !reduced {
             w.request_animation_frame();
         }
 

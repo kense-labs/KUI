@@ -31,11 +31,14 @@
     <p class="section-label">01 <i></i> LIVE GPUI</p>
     <div class="section-head live-head"><div><h2 id="live-heading">{live_heading}</h2><p class="live-note">{live_note}</p></div>
       <a class="more" data-cover-open-link href="{base}/kui/components/mission-control/">{live_open} {arrow}</a></div>
-    <div class="live-shell" data-cover-live-shell>
-      <div class="live-bar"><div class="live-tabs" role="toolbar" aria-label="Live GPUI showcases">{showcase_tabs}</div><span class="live-runtime">{live_badge}</span></div>
-      <div class="live-frame"><iframe allow="clipboard-write" loading="lazy" class="rust-story family-story pro-stage-story" data-cover-live-frame data-story="mission-control" data-story-key="mission-control" data-lang="{live_locale}" aria-label="Mission Control · {live_badge}" src="{live_url}"></iframe></div>
-      <div class="live-foot"><span>{live_interactions}</span><a data-cover-open-link href="{base}/kui/components/mission-control/">{live_source} {arrow}</a></div>
+    <div class="live-toolbar">
+      <div class="live-tabs" data-cover-tabs role="toolbar" aria-label="Live GPUI showcases"><span class="live-tab-indicator" aria-hidden="true"></span>{showcase_tabs}</div>
+      <span class="live-runtime"><i aria-hidden="true"></i>{live_badge}</span>
     </div>
+    <div class="live-shell" data-cover-live-shell>
+      <div class="live-frame"><iframe allow="clipboard-write" class="rust-story family-story pro-stage-story" data-cover-live-frame data-story="mission-control" data-story-key="mission-control" data-lang="{live_locale}" aria-label="Mission Control · {live_badge}" data-src="{live_url}"></iframe></div>
+    </div>
+    <div class="live-meta"><span>{live_interactions}</span><a data-cover-open-link href="{base}/kui/components/mission-control/">{live_source} {arrow}</a></div>
   </section>
   <section class="collection bounds" aria-labelledby="collection-heading">
     <p class="section-label">02 <i></i> COMPONENT INDEX</p>

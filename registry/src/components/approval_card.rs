@@ -454,6 +454,7 @@ pub struct ApprovalCard {
     expires_in: Option<u32>,
     accumulated_secs: f32,
     last_tick: Option<Instant>,
+    countdown_timer: Option<Task<()>>,
     card_hovered: bool,
     resolved_clock: PhaseClock,
     measured_width: Rc<Cell<f32>>,
@@ -495,6 +496,7 @@ impl ApprovalCard {
             expires_in: Some(45),
             accumulated_secs: 0.0,
             last_tick: None,
+            countdown_timer: None,
             card_hovered: false,
             resolved_clock: PhaseClock::default(),
             measured_width: Rc::new(Cell::new(420.0)),
@@ -749,28 +751,41 @@ impl ApprovalCard {
     fn tick_countdown(
         &mut self,
         paused: bool,
-        w: &mut Window,
+        _w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<(u32, f32)> {
         let total = self.expires_in? as f32;
         if self.status != ApprovalStatus::Pending {
             self.last_tick = None;
+            self.countdown_timer = None;
             return None;
         }
         let now = Instant::now();
         if paused {
             self.last_tick = Some(now);
+            self.countdown_timer = None;
         } else {
             if let Some(prev) = self.last_tick {
-                let dt = now.duration_since(prev).as_secs_f32().clamp(0.0, 0.25);
+                let dt = now.duration_since(prev).as_secs_f32().clamp(0.0, 0.5);
                 self.accumulated_secs = (self.accumulated_secs + dt).min(total);
             }
             self.last_tick = Some(now);
             if self.accumulated_secs >= total {
+                self.countdown_timer = None;
                 self.deny(ApprovalDenyReason::Timeout, cx);
                 return Some((0, 0.0));
             }
-            w.request_animation_frame();
+            if self.countdown_timer.is_none() {
+                self.countdown_timer = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(250))
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        this.countdown_timer = None;
+                        cx.notify();
+                    });
+                }));
+            }
         }
         let rem_secs = (total - self.accumulated_secs).max(0.0);
         let ratio = (rem_secs / total).clamp(0.0, 1.0);

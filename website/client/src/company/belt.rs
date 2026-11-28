@@ -225,11 +225,10 @@ impl BeltState {
                 &item.el,
                 "transform",
                 &format!(
-                    "translate(-50%, -50%) translateY({:.2}px)",
+                    "translate3d(-50%, -50%, 0) translate3d(0, {:.2}px, 0)",
                     rel * self.step_y
                 ),
             );
-            css(&item.el, "filter", &format!("grayscale({fade:.3})"));
             css(&item.el, "opacity", &format!("{opacity:.3}"));
         }
 

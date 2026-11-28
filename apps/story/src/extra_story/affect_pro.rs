@@ -134,7 +134,7 @@ impl AffectProStage {
 impl Render for AffectProStage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dark = Theme::global(cx).mode == kui::foundation::ThemeMode::Dark;
-        let stage_bg = if dark { rgb(0x1f1f22) } else { rgb(0xf4f4f6) };
+        let stage_bg = if dark { rgb(0x0c0c0e) } else { rgb(0xf8f8fa) };
         let vw = f32::from(window.viewport_size().width);
         let narrow = vw > 0. && vw < 520.;
         if self.full_block {

@@ -14,10 +14,10 @@ use web_sys::{
     MutationObserverInit, Window,
 };
 
-const TEX_W: usize = 160;
-const TEX_H: usize = 96;
-const PAD_X: usize = 20;
-const PAD_Y: usize = 16;
+const TEX_W: usize = 96;
+const TEX_H: usize = 58;
+const PAD_X: usize = 12;
+const PAD_Y: usize = 10;
 const GW: usize = TEX_W + 2 * PAD_X;
 const GH: usize = TEX_H + 2 * PAD_Y;
 const CYCLE_MS: f64 = 7800.0;
@@ -174,6 +174,7 @@ struct HeroFloor {
     ctx: CanvasRenderingContext2d,
     media: MediaQueryList,
     visible: bool,
+    cached_aspect: f32,
     start_ms: Option<f64>,
     last_paint_ms: f64,
     color_buf: Vec<[f32; 4]>,
@@ -192,18 +193,18 @@ impl HeroFloor {
             == Some("dark")
     }
 
-    fn aspect(&self) -> f32 {
+    fn refresh_aspect(&mut self) {
         let r = self.canvas.get_bounding_client_rect();
-        if r.width() > 1.0 && r.height() > 1.0 {
+        self.cached_aspect = if r.width() > 1.0 && r.height() > 1.0 {
             ((r.height() / r.width()) as f32).clamp(0.24, 0.85)
         } else {
             0.42
-        }
+        };
     }
 
     fn render(&mut self, phase: f32) {
         let cont_w = 2200.0f32;
-        let cont_h = cont_w * self.aspect();
+        let cont_h = cont_w * self.cached_aspect;
 
         let (crests0, drift_c, drift_l) = if phase < 0.0 {
             (
@@ -354,7 +355,7 @@ impl HeroFloor {
             return false;
         }
         let t0 = *self.start_ms.get_or_insert(now);
-        if self.last_paint_ms == 0.0 || now - self.last_paint_ms >= 28.0 {
+        if self.last_paint_ms == 0.0 || now - self.last_paint_ms >= 44.0 {
             self.last_paint_ms = now;
             let phase = (((now - t0) % CYCLE_MS) / CYCLE_MS) as f32;
             self.render(phase);
@@ -378,6 +379,8 @@ pub(super) fn init(
     else {
         return Ok(());
     };
+    canvas.set_width(TEX_W as u32);
+    canvas.set_height(TEX_H as u32);
     let Some(ctx) = canvas
         .get_context("2d")
         .ok()
@@ -394,6 +397,7 @@ pub(super) fn init(
         ctx,
         media: media.clone(),
         visible: true,
+        cached_aspect: 0.42,
         start_ms: None,
         last_paint_ms: 0.0,
         color_buf: vec![[0.0; 4]; GW * GH],
@@ -402,7 +406,7 @@ pub(super) fn init(
         light_tmp: vec![[0.0; 1]; GW * GH],
         rgba: vec![0u8; TEX_W * TEX_H * 4],
     };
-    // Paint immediate first frame so there is zero pop-in
+    floor.refresh_aspect();
     floor.render(if media.matches() { -1.0 } else { 0.0 });
 
     let state = Rc::new(RefCell::new(floor));
@@ -452,7 +456,10 @@ pub(super) fn init(
     ] {
         let (state, frame) = (state.clone(), frame.clone());
         listen(target, ev, move |_| {
-            state.borrow_mut().last_paint_ms = 0.0;
+            let mut s = state.borrow_mut();
+            s.refresh_aspect();
+            s.last_paint_ms = 0.0;
+            drop(s);
             frame.request();
         })?;
     }

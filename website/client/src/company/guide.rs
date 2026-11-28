@@ -919,7 +919,7 @@ pub(super) fn init(
         trail_dirty: false,
         home_dock,
         family_berths,
-        gpui_slot: root.query_selector("[data-kense-gpui-slot]")?,
+        gpui_slot: root.query_selector(".kense-exp-stage")?,
         anchors,
         header: page.query_selector("header.topbar")?,
         target: None,

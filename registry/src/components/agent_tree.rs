@@ -1207,10 +1207,6 @@ impl Render for AgentTree {
         let failed_nodes = collect_tree_by(&root_node, |n| n.status == TreeStatus::Failed);
         let total_cost = rollup_cost(&root_node);
 
-        if running_count > 0 && !reduced {
-            w.request_animation_frame();
-        }
-
         let container_w = self.measured_width.get();
         let wide = container_w >= 680.0 && root_node.children.len() <= 3;
 
@@ -1573,11 +1569,7 @@ impl Render for AgentTree {
         let link_muted = p.line_strong;
         let pulse_blue = p.blue;
         let card_bg = p.card;
-        let pulse_t = if running_count > 0 && !reduced {
-            Some((self.boot.elapsed().as_secs_f32() / 2.4).fract())
-        } else {
-            None
-        };
+        let pulse_t: Option<f32> = None;
 
         let links_canvas = canvas(
             |_, _, _| (),

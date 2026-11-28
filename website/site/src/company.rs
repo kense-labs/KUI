@@ -1045,49 +1045,65 @@ pub fn page(en: bool, rev: &str) -> String {
     <div class="kense-exp-stage kense-reveal">
       <div class="kense-exp-copy-stack">
         <div id="experience-gateway" class="kense-exp-copy is-active" role="tabpanel" aria-labelledby="kense-tab-gateway" data-kense-panel="gateway" data-gpui-story="kense-gateway">
-          <h3>{gw_h}</h3>
-          <p>{gw_p}</p>
+          <div class="kense-exp-copy-head">
+            <div class="kense-exp-copy-lead">
+              <h3>{gw_h}</h3>
+              <p>{gw_p}</p>
+            </div>
+            <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstack" data-product-badge="kstack" data-kense-hint="{gw_hint}">{gw_cta}</a>
+          </div>
           <ul class="kense-exp-points">
             <li><p>{gw_b1}</p></li>
             <li><p>{gw_b2}</p></li>
             <li><p>{gw_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstack" data-product-badge="kstack" data-kense-hint="{gw_hint}">{gw_cta}</a>
         </div>
         <div id="experience-sandbox" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-sandbox" data-kense-panel="sandbox" data-gpui-story="kense-sandbox" hidden>
-          <h3>{sb_h}</h3>
-          <p>{sb_p}</p>
+          <div class="kense-exp-copy-head">
+            <div class="kense-exp-copy-lead">
+              <h3>{sb_h}</h3>
+              <p>{sb_p}</p>
+            </div>
+            <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstudio" data-product-badge="kstudio" data-kense-hint="{sb_hint}">{sb_cta}</a>
+          </div>
           <ul class="kense-exp-points">
             <li><p>{sb_b1}</p></li>
             <li><p>{sb_b2}</p></li>
             <li><p>{sb_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstudio" data-product-badge="kstudio" data-kense-hint="{sb_hint}">{sb_cta}</a>
         </div>
         <div id="experience-interface" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-interface" data-kense-panel="interface" data-gpui-story="kense-workbench" hidden>
-          <h3>{ui_h}</h3>
-          <p>{ui_p}</p>
+          <div class="kense-exp-copy-head">
+            <div class="kense-exp-copy-lead">
+              <h3>{ui_h}</h3>
+              <p>{ui_p}</p>
+            </div>
+            <a class="kense-pill kense-pill--solid" href="{prefix}/kui/" data-product-badge="kui" data-kense-hint="{ui_hint}">{ui_cta}</a>
+          </div>
           <ul class="kense-exp-points">
             <li><p>{ui_b1}</p></li>
             <li><p>{ui_b2}</p></li>
             <li><p>{ui_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="{prefix}/kui/" data-product-badge="kui" data-kense-hint="{ui_hint}">{ui_cta}</a>
         </div>
         <div id="experience-klang" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-klang" data-kense-panel="klang" data-gpui-story="kense-klang" hidden>
-          <h3>{kl_h}</h3>
-          <p>{kl_p}</p>
+          <div class="kense-exp-copy-head">
+            <div class="kense-exp-copy-lead">
+              <h3>{kl_h}</h3>
+              <p>{kl_p}</p>
+            </div>
+            <a class="kense-pill kense-pill--solid" href="{kl_url}" data-product-badge="klang" data-kense-hint="{kl_hint}">{kl_cta}</a>
+          </div>
           <ul class="kense-exp-points">
             <li><p>{kl_b1}</p></li>
             <li><p>{kl_b2}</p></li>
             <li><p>{kl_b3}</p></li>
           </ul>
-          <a class="kense-pill kense-pill--solid" href="{kl_url}" data-product-badge="klang" data-kense-hint="{kl_hint}">{kl_cta}</a>
         </div>
       </div>
       <div class="kense-exp-media" data-kense-gpui-slot>
         <div class="kense-gpui-shell">
-          <iframe allow="clipboard-write" class="rust-story kense-gpui-frame" data-kense-gpui-frame data-story="kense-gateway" data-story-key="kense-gateway" data-lang="{locale}" aria-label="{gpui_label}" src="{gpui_src}"></iframe>
+          <iframe allow="clipboard-write" class="rust-story kense-gpui-frame" data-kense-gpui-frame data-story="kense-gateway" data-story-key="kense-gateway" data-lang="{locale}" aria-label="{gpui_label}" data-src="{gpui_src}"></iframe>
         </div>
       </div>
     </div>
@@ -1096,12 +1112,12 @@ pub fn page(en: bool, rev: &str) -> String {
         title = tr(
             en,
             "直接在网页里点按试试真实的 GPUI 界面",
-            "Try a live Rust + GPUI panel right in your browser"
+            "Try real Kense product interfaces right in your browser"
         ),
         desc = tr(
             en,
-            "右侧不是静态截图，而是编译成 WebAssembly 实时运行的 GPUI 实例。切换选项卡或点击面板按钮，直接试试 KStack 选卡调度、KStudio 隔离运行、KWork 工具确认与 K 语言编译检查。",
-            "The panel on the right is a real Rust + GPUI WebAssembly instance. Switch tabs or click controls to test KStack GPU placement, KStudio isolated boxes, KWork tool approvals, and K compiler checks."
+            "下方不是静态截图，而是编译成 WebAssembly 实时运行的真实产品界面。切换选项卡或直接点击窗口内的会话、算力节点、远程终端与编译器控件即可交互。",
+            "Below is not a static screenshot—each window is a real Kense product workspace compiled to WebAssembly with Rust + GPUI. Switch tabs or interact directly with nodes, terminals, diffs, and compiler checks."
         ),
         tablist_label = tr(en, "核心产品交互演示", "Interactive product scenarios"),
         gpui_label = tr(en, "实时 GPUI 交互面板", "Live GPUI interactive panel"),
@@ -1110,49 +1126,49 @@ pub fn page(en: bool, rev: &str) -> String {
                 r#"id="kense-tab-gateway" class="kense-tab is-active" role="tab" aria-selected="true" aria-controls="experience-gateway" data-kense-tab="gateway" data-gpui-story="kense-gateway" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 KStack 显存估算与异构选卡面板",
-                    "Switch to KStack VRAM estimate & GPU placement"
+                    "切换至 KStack 显存估算与异构选卡工作台",
+                    "Switch to KStack VRAM estimate & GPU placement console"
                 )
             ),
-            tr(en, "KStack 算力与选卡", "KStack Placement")
+            tr(en, "KStack 算力控制台", "KStack Console")
         ),
         tab_sb = button(
             &format!(
                 r#"id="kense-tab-sandbox" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-sandbox" data-kense-tab="sandbox" data-gpui-story="kense-sandbox" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 KStudio 远程机器与隔离环境面板",
-                    "Switch to KStudio machine & MicroVM isolation"
+                    "切换至 KStudio 多机终端与沙箱隔离工作台",
+                    "Switch to KStudio multi-machine terminal & isolation workspace"
                 )
             ),
-            tr(en, "KStudio 多机与隔离", "KStudio Machines")
+            tr(en, "KStudio 多机终端", "KStudio Machines")
         ),
         tab_ui = button(
             &format!(
                 r#"id="kense-tab-interface" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-interface" data-kense-tab="interface" data-gpui-story="kense-workbench" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 KWork 工作区会话与单次工具确认面板",
-                    "Switch to KWork workspace & tool approval"
+                    "切换至 KWork 桌面会话、离线听写与 Git Diff 审阅工作台",
+                    "Switch to KWork workspace, offline dictation & Git diff review"
                 )
             ),
-            tr(en, "KWork 会话与授权", "KWork Workspace")
+            tr(en, "KWork 桌面工作台", "KWork Workbench")
         ),
         tab_klang = button(
             &format!(
                 r#"id="kense-tab-klang" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-klang" data-kense-tab="klang" data-gpui-story="kense-klang" data-kense-hint="{}""#,
                 tr(
                     en,
-                    "切换至 K 语言生命周期检查与多目标构建面板",
-                    "Switch to K lifetime verification & target build"
+                    "切换至 K 语言生命周期检查与多目标构建工作台",
+                    "Switch to K lifetime verification & target build studio"
                 )
             ),
-            tr(en, "K 语言编译与验证", "K Compiler")
+            tr(en, "K 语言编译验证", "K Compiler")
         ),
         gw_h = tr(
             en,
-            "先算清显存开销<br>再把模型放到合适的卡上",
-            "Estimate memory upfront<br>Place each model on the right GPU"
+            "先算清显存开销，再把模型放到合适的卡上",
+            "Estimate memory upfront, then place each model on the right GPU"
         ),
         gw_p = tr(
             en,
@@ -1182,8 +1198,8 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         sb_h = tr(
             en,
-            "把任务交给远端机器<br>在独立环境里踏实跑完",
-            "Hand tasks to your machines<br>Run inside isolated environments"
+            "把任务交给远端机器，在独立环境里踏实跑完",
+            "Hand tasks to your machines inside isolated environments"
         ),
         sb_p = tr(
             en,
@@ -1213,28 +1229,28 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         ui_h = tr(
             en,
-            "看清每一步工具调用<br>一套 GPUI 界面横跨桌面与网页",
-            "Clear tool approvals in KWork<br>Powered by shared KUI controls"
+            "会话、离线听写与 Git Diff 审阅同屏协作",
+            "Conversations, offline dictation, and Git diff review in one workspace"
         ),
         ui_p = tr(
             en,
-            "KWork 用 KUI 组件构建流畅的桌面工作区：模型切换、工具入参审阅、一次性权限批准与定时任务都在同一套简洁界面里完成。",
-            "KWork is built on KUI controls for fast everyday agent work: switch models inline, inspect tool arguments, approve sensitive commands once, and schedule recurring runs."
+            "KWork 基于 KUI 构建原生桌面工作台：左侧切换本地目录会话与 Git 改动，中间流式对话并支持本地 Whisper 离线语音听写，右侧同屏审阅代码变更并一键起草审查。",
+            "KWork is built on KUI as a native desktop workbench: browse workspace chats on the left, stream agent turns with offline Whisper dictation in the center, and review unified Git diffs side by side."
         ),
         ui_b1 = tr(
             en,
-            "按本地目录建立工作区，完整保留历史记录并支持冷启动恢复",
-            "Workspace-scoped local history with clean session resume"
+            "三栏桌面工作区：会话收件箱、结构化对话流与行级 Git Diff 同屏对照",
+            "Three-pane desktop layout uniting chat inbox, structured turns, and unified Git diffs"
         ),
         ui_b2 = tr(
             en,
-            "敏感文件修改与终端命令先展示详情，点确认后再放行",
-            "Review exact command arguments before granting single-use approval"
+            "内置本地 Whisper 离线语音听写与多模型切换，敏感命令逐次确认",
+            "Built-in local Whisper dictation, inline model picker, and per-command approval"
         ),
         ui_b3 = tr(
             en,
-            "同一套 KUI 组件也可直接打开网页画廊在线预览与拷贝源码",
-            "Every KUI control used here can be previewed in the browser and added via kui CLI"
+            "界面全部由 KUI 组件渲染，同一套源码同时编译桌面端与 WebAssembly",
+            "Every control is built with KUI and compiles from one source to desktop and WebAssembly"
         ),
         ui_cta = svg::action_content(tr(en, "打开 KUI 组件画廊", "Explore KUI gallery")),
         ui_hint = if en {
@@ -1244,8 +1260,8 @@ pub fn page(en: bool, rev: &str) -> String {
         },
         kl_h = tr(
             en,
-            "编译期查清引用生命周期<br>一套检查器输出本机与 WASI",
-            "Check lifetimes ahead of time<br>Emit native C, WASI, or TinyCC"
+            "编译期查清引用生命周期，一套检查器输出本机与 WASI",
+            "Check lifetimes ahead of time, emit native C, WASI, or TinyCC"
         ),
         kl_p = tr(
             en,

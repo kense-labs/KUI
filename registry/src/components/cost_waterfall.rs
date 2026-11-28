@@ -1147,10 +1147,7 @@ impl Render for CostWaterfall {
             compute_waterfall(&self.steps, &self.collapsed)
         };
         let run_status = self.status_override.unwrap_or(summary.run_status);
-        let is_live = run_status == CostStepStatus::Running && !summary.rows.is_empty();
-        if is_live && !reduced {
-            window.request_animation_frame();
-        }
+        let _is_live = run_status == CostStepStatus::Running && !summary.rows.is_empty();
 
         let width_px = self.measured_w.get().max(280.0);
         let is_stack = width_px < 520.0;
@@ -1211,11 +1208,7 @@ impl Render for CostWaterfall {
                     }),
             );
 
-        let pulse_alpha = if reduced {
-            1.0
-        } else {
-            0.40 + 0.60 * (0.5 + 0.5 * ((elapsed / 1.4) * std::f32::consts::TAU).cos())
-        };
+        let pulse_alpha = 1.0_f32;
         let (pill_bg, pill_fg, pill_lbl, pill_dot) = match run_status {
             CostStepStatus::Running => (p.accent_soft, p.blue, tr(cx, "Live", "实时"), true),
             CostStepStatus::Done => (p.green_soft, p.green_ink, tr(cx, "Done", "完成"), false),

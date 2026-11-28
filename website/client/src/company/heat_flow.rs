@@ -44,12 +44,12 @@ float noise(vec2 p) {
 }
 
 float fbm(vec2 p) {
-    float v = 0.0, a = 0.52;
+    float v = 0.0, a = 0.54;
     mat2 r = mat2(0.82, -0.57, 0.57, 0.82);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 4; i++) {
         v += a * noise(p);
         p = r * p * 1.88 + 8.17;
-        a *= 0.51;
+        a *= 0.50;
     }
     return v;
 }
@@ -135,10 +135,29 @@ struct HeatState {
     hover: f64,
     goal_hover: f64,
     visible: bool,
+    cw: u32,
+    ch: u32,
+    last_ms: f64,
     start_ms: Option<f64>,
 }
 
 impl HeatState {
+    fn sync_size(&mut self) {
+        let dpr = self.window.device_pixel_ratio().clamp(1.0, 1.25);
+        let w = (f64::from(self.target.client_width()) * dpr)
+            .round()
+            .max(1.0) as u32;
+        let h = (f64::from(self.target.client_height()) * dpr)
+            .round()
+            .max(1.0) as u32;
+        self.cw = w;
+        self.ch = h;
+        if self.canvas.width() != w || self.canvas.height() != h {
+            self.canvas.set_width(w);
+            self.canvas.set_height(h);
+        }
+    }
+
     fn tick(&mut self, now: f64) -> bool {
         if self.document.hidden()
             || !self.visible
@@ -147,6 +166,15 @@ impl HeatState {
         {
             return false;
         }
+        let min_dt = if self.hover > 0.02 || self.goal_hover > 0.02 {
+            15.0
+        } else {
+            32.0
+        };
+        if self.last_ms != 0.0 && now - self.last_ms < min_dt {
+            return true;
+        }
+        self.last_ms = now;
         let t0 = *self.start_ms.get_or_insert(now);
         let t = ((now - t0) / 1000.0) as f32;
 
@@ -154,17 +182,11 @@ impl HeatState {
         self.py += (self.goal_py - self.py) * 0.16;
         self.hover += (self.goal_hover - self.hover) * 0.12;
 
-        let dpr = self.window.device_pixel_ratio().clamp(1.0, 2.0);
-        let w = (f64::from(self.target.client_width()) * dpr)
-            .round()
-            .max(1.0) as u32;
-        let h = (f64::from(self.target.client_height()) * dpr)
-            .round()
-            .max(1.0) as u32;
-        if self.canvas.width() != w || self.canvas.height() != h {
-            self.canvas.set_width(w);
-            self.canvas.set_height(h);
+        if self.cw == 0 || self.ch == 0 {
+            self.sync_size();
         }
+        let w = self.cw;
+        let h = self.ch;
 
         self.gl.viewport(0, 0, w as i32, h as i32);
         self.gl.use_program(Some(&self.program));
@@ -271,6 +293,9 @@ pub(super) fn init(
         hover: 0.0,
         goal_hover: 0.0,
         visible: true,
+        cw: 0,
+        ch: 0,
+        last_ms: 0.0,
         start_ms: None,
     }));
 
@@ -278,6 +303,17 @@ pub(super) fn init(
         let st = state.clone();
         move |now| st.borrow_mut().tick(now)
     });
+
+    listen(window, "resize", {
+        let st = state.clone();
+        let fr = frame.clone();
+        move |_| {
+            let mut s = st.borrow_mut();
+            s.cw = 0;
+            s.ch = 0;
+            fr.request();
+        }
+    })?;
 
     let io_cb = Closure::<dyn FnMut(Array)>::new({
         let st = state.clone();

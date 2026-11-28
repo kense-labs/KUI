@@ -27,7 +27,7 @@ impl Ribbon {
             return;
         }
         let elapsed = self.previous.map(|last| now - last);
-        if elapsed.is_some_and(|ms| ms < 1000.0 / 60.0 - 1.0) {
+        if elapsed.is_some_and(|ms| ms < 31.0) {
             return;
         }
         self.previous = Some(now);

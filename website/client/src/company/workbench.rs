@@ -2,7 +2,10 @@
 
 use crate::cover::{Frame, Result, css, flag, listen};
 use js_sys::{Array, Function, Reflect};
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{
     Document, Element, HtmlElement, HtmlIFrameElement, IntersectionObserver,
@@ -10,7 +13,18 @@ use web_sys::{
     ResizeObserver, Url, Window,
 };
 
-fn switch_gpui_story(window: &Window, frame: &HtmlIFrameElement, story: &str) {
+fn ensure_gpui_booted(frame: &HtmlIFrameElement) {
+    if frame.has_attribute("src") {
+        return;
+    }
+    if let Some(deferred) = frame.get_attribute("data-src")
+        && !deferred.is_empty()
+    {
+        let _ = frame.set_attribute("src", &deferred);
+    }
+}
+
+fn switch_gpui_story(window: &Window, frame: &HtmlIFrameElement, story: &str, force_boot: bool) {
     let lang = frame
         .get_attribute("data-lang")
         .unwrap_or_else(|| "zh".into());
@@ -30,15 +44,19 @@ fn switch_gpui_story(window: &Window, frame: &HtmlIFrameElement, story: &str) {
         return;
     }
 
-    // If the lazy GPUI iframe has not booted `kuiPreview` yet, update its initial query string.
-    if let Some(raw_src) = frame.get_attribute("src")
+    // Update pending URL only before the iframe starts loading; never abort an in-flight 56 MB WASM boot.
+    if !frame.has_attribute("src")
+        && let Some(raw_src) = frame.get_attribute("data-src")
         && let Ok(base) = window.location().href()
         && let Ok(url) = Url::new_with_base(&raw_src, &base)
     {
         let next = format!("{}?story={story}&lang={lang}", url.pathname());
         if raw_src != next {
-            let _ = frame.set_attribute("src", &next);
+            let _ = frame.set_attribute("data-src", &next);
         }
+    }
+    if force_boot {
+        ensure_gpui_booted(frame);
     }
 }
 
@@ -105,14 +123,14 @@ fn activate_tab(window: &Window, root: &Element, key: &str, focus_tab: bool) {
         && el.namespace_uri().as_deref() == Some("http://www.w3.org/1999/xhtml")
     {
         let frame: HtmlIFrameElement = el.unchecked_into();
-        switch_gpui_story(window, &frame, &story_id);
+        switch_gpui_story(window, &frame, &story_id, true);
     }
 }
 
 fn sync_hash_tab(window: &Window, root: &Element) {
     let hash = window.location().hash().unwrap_or_default();
     let tab = match hash.as_str() {
-        "#experience-gateway" => Some("gateway"),
+        "#experience" | "#experience-gateway" => Some("gateway"),
         "#experience-sandbox" => Some("sandbox"),
         "#experience-interface" => Some("interface"),
         "#experience-klang" => Some("klang"),
@@ -362,6 +380,9 @@ pub(super) fn init(
             if let Ok(Some(tab)) = target.closest("[data-kense-tab]")
                 && let Some(key) = tab.get_attribute("data-kense-tab")
             {
+                if let Ok(Some(bar)) = root.query_selector("[data-kense-tabs]") {
+                    flag(&bar, "data-indicator-animate", true);
+                }
                 activate_tab(&win, &root, &key, false);
             }
         }
@@ -400,7 +421,7 @@ pub(super) fn init(
         }
     })?;
 
-    // Ensure lazy GPUI iframe syncs to active tab once booted
+    // Defer GPUI WASM iframe boot until intro finishes AND `#experience` nears the viewport.
     if let Ok(Some(el)) = root.query_selector("[data-kense-gpui-frame]")
         && el.namespace_uri().as_deref() == Some("http://www.w3.org/1999/xhtml")
     {
@@ -410,10 +431,97 @@ pub(super) fn init(
             let frame = frame.clone();
             move |_| {
                 if let Some(story) = frame.get_attribute("data-story") {
-                    switch_gpui_story(&win, &frame, &story);
+                    switch_gpui_story(&win, &frame, &story, false);
                 }
             }
         })?;
+
+        if let Some(slot) = root
+            .query_selector("#experience")
+            .ok()
+            .flatten()
+            .or_else(|| root.query_selector("[data-kense-gpui-slot]").ok().flatten())
+        {
+            let near_view = Rc::new(Cell::new(false));
+            let intro_active = document
+                .body()
+                .is_some_and(|b| b.has_attribute("data-kense-intro-active"));
+            let intro_done = Rc::new(Cell::new(!intro_active));
+
+            let maybe_boot = {
+                let near_view = near_view.clone();
+                let intro_done = intro_done.clone();
+                let frame = frame.clone();
+                move || {
+                    if near_view.get() && intro_done.get() {
+                        ensure_gpui_booted(&frame);
+                    }
+                }
+            };
+
+            let io_cb = Closure::<dyn FnMut(Array, IntersectionObserver)>::new({
+                let near_view = near_view.clone();
+                let maybe_boot = maybe_boot.clone();
+                let frame_check = frame.clone();
+                move |entries: Array, observer: IntersectionObserver| {
+                    for item in entries.iter() {
+                        if let Ok(entry) = item.dyn_into::<IntersectionObserverEntry>()
+                            && entry.is_intersecting()
+                        {
+                            near_view.set(true);
+                            maybe_boot();
+                            if frame_check.has_attribute("src") {
+                                observer.disconnect();
+                            }
+                        }
+                    }
+                }
+            });
+            if let Ok(io) = IntersectionObserver::new(io_cb.as_ref().unchecked_ref()) {
+                io.observe(&slot);
+                std::mem::forget(io);
+                io_cb.forget();
+            }
+
+            let check_bounds = {
+                let win = window.clone();
+                let slot = slot.clone();
+                let near_view = near_view.clone();
+                let maybe_boot = maybe_boot.clone();
+                let frame_check = frame.clone();
+                move || {
+                    if frame_check.has_attribute("src") {
+                        return;
+                    }
+                    let vh = win
+                        .inner_height()
+                        .ok()
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(900.0);
+                    let r = slot.get_bounding_client_rect();
+                    if r.top() < vh + 360.0 && r.bottom() > -360.0 {
+                        near_view.set(true);
+                        maybe_boot();
+                    }
+                }
+            };
+            check_bounds();
+            listen(window, "scroll", {
+                let check_bounds = check_bounds.clone();
+                move |_| check_bounds()
+            })?;
+
+            if intro_active {
+                let intro_done = intro_done.clone();
+                let check_bounds = check_bounds.clone();
+                let maybe_boot = maybe_boot.clone();
+                listen(document, "kense:intro-done", move |_| {
+                    intro_done.set(true);
+                    check_bounds();
+                    maybe_boot();
+                })?;
+            }
+        }
     }
 
     // Handle Tab / Shift+Tab focus escape from the live GPUI workbench iframe on `/`

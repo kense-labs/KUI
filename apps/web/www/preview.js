@@ -464,7 +464,7 @@ window.kuiFramePainted = (height, renderedDark) => {
   const revision = paintRevision;
   const story = mounted;
   if (needsResize) {
-    requestAnimationFrame(() => {
+    nativeRequestAnimationFrame(() => {
       if (revision !== paintRevision || story !== mounted || document.documentElement.dataset.previewError) return;
       if (frame && frame.style.height !== nextHeight) {
         frame.style.height = nextHeight;
@@ -526,6 +526,7 @@ try {
     if (!canStreamGzip) throw error;
     await init({ module_or_path: wasmUrl });
   }
+  if (frame?.dataset.storyKey) selected = initialSelection();
   mounted = selected;
   set_accent(...accentPair);
   start(mounted.story, dark, reduced, mounted.lang === "zh", embedded);
@@ -541,8 +542,34 @@ try {
 
 // Notify GPUI once per visibility edge; hidden previews must not keep a paint clock alive.
 let lastActivity;
+let pausedFrames = [];
+let nextPausedFrameId = 1_000_000;
+const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+const nativeCancelAnimationFrame = window.cancelAnimationFrame.bind(window);
+window.requestAnimationFrame = cb => {
+  if (paintedStory && (document.hidden || self.kuiStoryInViewport === false || self.kuiStoryPageActive === false)) {
+    const id = ++nextPausedFrameId;
+    pausedFrames.push({ id, cb });
+    return id;
+  }
+  return nativeRequestAnimationFrame(cb);
+};
+window.cancelAnimationFrame = id => {
+  if (id > 1_000_000) {
+    pausedFrames = pausedFrames.filter(item => item.id !== id);
+    return;
+  }
+  nativeCancelAnimationFrame(id);
+};
+function flushPausedFrames() {
+  if (!pausedFrames.length) return;
+  const batch = pausedFrames;
+  pausedFrames = [];
+  for (const item of batch) nativeRequestAnimationFrame(item.cb);
+}
 function syncPreviewActivity() {
   const active = !document.hidden && self.kuiStoryInViewport !== false && self.kuiStoryPageActive !== false;
+  if (active) flushPausedFrames();
   if (active === lastActivity || !running) return;
   lastActivity = active;
   request_snapshot();
@@ -560,7 +587,7 @@ function refreshFrameVisibility() {
   syncPreviewActivity();
 }
 function scheduleFrameVisibility() {
-  visibilityCheck ??= requestAnimationFrame(refreshFrameVisibility);
+  visibilityCheck ??= setTimeout(refreshFrameVisibility, 0);
 }
 const VisibilityObserver = visibilityHost?.IntersectionObserver ?? IntersectionObserver;
 const visibilityObserver = new VisibilityObserver(entries => {
@@ -589,7 +616,7 @@ window.addEventListener("pagehide", () => {
   visibilityObserver.disconnect();
   visibilityListeners?.abort();
   visibilityListeners = undefined;
-  if (visibilityCheck !== undefined) cancelAnimationFrame(visibilityCheck);
+  if (visibilityCheck !== undefined) clearTimeout(visibilityCheck);
   visibilityCheck = undefined;
   syncPreviewActivity();
 });

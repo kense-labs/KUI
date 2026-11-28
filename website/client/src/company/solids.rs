@@ -2299,7 +2299,7 @@ pub(super) fn init(
             canvas,
             ctx,
             kind,
-            visible: true,
+            visible: false,
             hovered: false,
             hover_amt: 0.0,
             entered: reduced.matches(),
@@ -2340,20 +2340,8 @@ pub(super) fn init(
         last_dark: dark_now,
     }));
 
-    // Paint initial frame synchronously so every visible sculpture is crisp on Frame 1
-    if let Ok(mut eng) = engine.try_borrow_mut() {
-        let dark = eng.is_dark();
-        let StudioEngine {
-            pipeline, slots, ..
-        } = &mut *eng;
-        for slot in slots.iter_mut() {
-            let saved = slot.appear;
-            slot.appear = 1.0;
-            pipeline.render_slot(slot, dark);
-            flag(&slot.host, "data-solid-ready", true);
-            slot.appear = saved;
-        }
-    }
+    // Offscreen sculptures remain backed by lightweight SVG fallbacks until IntersectionObserver
+    // marks them visible, keeping initial page entry completely jank-free.
 
     let frame = Frame::new(window, {
         let engine = engine.clone();
