@@ -24,6 +24,9 @@ pub fn silhouette_paths(kind: &str) -> &'static str {
         "kwork" => {
             r##"<path fill="currentColor" fill-opacity="0.52" fill-rule="evenodd" d="M16 9h32a6 6 0 0 1 6 6v22H10V15a6 6 0 0 1 6-6Zm4 9h11v4.5H20V18Zm0 8h20v4.5H20V26Z"/><path fill="currentColor" fill-opacity="0.9" d="M10 40h44l5 11.5A3.5 3.5 0 0 1 55.8 56H8.2A3.5 3.5 0 0 1 5 51.5Z"/>"##
         }
+        "klang" => {
+            r##"<path fill="currentColor" fill-opacity="0.9" d="M11 12a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v40a3 3 0 0 1-3 3h-5a3 3 0 0 1-3-3Z"/><path fill="currentColor" fill-opacity="0.54" d="M23 29.5 40.5 9H52.5L33.5 31.5H23Z"/><path fill="currentColor" fill-opacity="0.88" d="M32.5 29.5 53.5 55H40.5L23 34V29.5Z"/>"##
+        }
         "krun" => {
             r##"<path fill="currentColor" fill-opacity="0.38" d="M9 14h14l16 18-16 18H9l16-18Z"/><path fill="currentColor" fill-opacity="0.68" d="M23 14h14l16 18-16 18H23l16-18Z"/><path fill="currentColor" fill-opacity="0.95" d="m38 20 18 12-18 12 6.5-12Z"/>"##
         }
@@ -71,6 +74,10 @@ pub fn detail_paths(kind: &str) -> &'static str {
         "kwork" => {
             // Cantilevered Burnished-Amber Studio Display + Keyboard Fold
             r##"<path fill="#FBBF24" d="M16 9h32a6 6 0 0 1 6 6v23H10V15a6 6 0 0 1 6-6Z"/><path fill="#FDE68A" d="M16 9h32a6 6 0 0 1 6 6v5H10v-5a6 6 0 0 1 6-6Z"/><path fill="#B45309" d="M10 36h44v4H10Z"/><path fill="#D97706" d="M10 39h44l5.2 11.8A3.4 3.4 0 0 1 56 55.6H8a3.4 3.4 0 0 1-3.2-4.8Z"/><path fill="#78350F" d="m19 20 6.5 5-6.5 5v-3.4l3.2-1.6-3.2-1.6Zm9.5 6.8h15v3.4h-15Z"/><rect x="24" y="45.5" width="16" height="4" rx="2" fill="#FEF3C7"/>"##
+        }
+        "klang" => {
+            // Sculpted Architectural K Monolith + Folded Crimson-Ruby Compiler Wings & Core Crystal
+            r##"<path fill="#FB7185" d="M11 12a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v40a3 3 0 0 1-3 3h-5a3 3 0 0 1-3-3Z"/><path fill="#FDA4AF" d="M11 12a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v8H11Z"/><path fill="#FDA4AF" d="M23 29.5 40.5 9H52.5L33.5 31.5H23Z"/><path fill="#E11D48" d="M32.5 29.5 53.5 55H40.5L23 34V29.5Z"/><path fill="#9F1239" d="m32.5 29.5 6.8 8.2-9.5 1.8L23 34Z"/><path fill="#FFF1F2" d="m27.5 27.2 4.8 4.8-4.8 4.8-4.8-4.8Z"/>"##
         }
         "krun" => {
             // Supersonic Triple-Delta Coral/Vermilion Launch Wing

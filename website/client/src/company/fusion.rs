@@ -6,7 +6,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-pub(super) const SCENE_COUNT: usize = 8;
+pub(super) const SCENE_COUNT: usize = 9;
 
 pub(super) fn parse_scene_idx(kind: &str) -> Option<usize> {
     match kind {
@@ -18,6 +18,7 @@ pub(super) fn parse_scene_idx(kind: &str) -> Option<usize> {
         "clay-release" => Some(5),
         "clay-rust" => Some(6),
         "studio" => Some(7),
+        "klang" => Some(8),
         _ => None,
     }
 }

@@ -16,7 +16,12 @@ use kui::{
 };
 use std::time::Duration;
 
-pub const IDS: &[&str] = &["kense-gateway", "kense-sandbox", "kense-workbench"];
+pub const IDS: &[&str] = &[
+    "kense-gateway",
+    "kense-sandbox",
+    "kense-workbench",
+    "kense-klang",
+];
 
 /// Instantiate a Kense homepage GPUI showcase scene when `id` matches [`IDS`].
 pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Option<AnyView> {
@@ -27,6 +32,7 @@ pub fn story(id: &str, w: &mut Window, cx: &mut Context<crate::StoryHost>) -> Op
     let kind = match id {
         "kense-sandbox" => Kind::Sandbox,
         "kense-workbench" => Kind::Workbench,
+        "kense-klang" => Kind::Klang,
         _ => Kind::Gateway,
     };
     let inner: AnyView = cx.new(|cx| Scene::new(kind, w, cx)).into();
@@ -38,6 +44,7 @@ enum Kind {
     Gateway,
     Sandbox,
     Workbench,
+    Klang,
 }
 
 struct HostShell {
@@ -173,21 +180,30 @@ impl Scene {
                 GlassSegmentOption::new("high", "V4"),
                 GlassSegmentOption::new("max", "Reasoner"),
             ],
+            Kind::Klang => vec![
+                GlassSegmentOption::new("native", "Native C"),
+                GlassSegmentOption::new("wasi", "wasm32-wasip1"),
+                GlassSegmentOption::new("tinycc", "TinyCC JIT"),
+            ],
         };
-        let segmented =
-            cx.new(|cx| GlassSegmented::new(t("Target", "目标节点"), options, cx).with_small(true));
+        let seg_label = match kind {
+            Kind::Klang => t("Target", "编译目标"),
+            _ => t("Target", "目标节点"),
+        };
+        let segmented = cx.new(|cx| GlassSegmented::new(seg_label, options, cx).with_small(true));
         let toggle_label = match kind {
             Kind::Gateway => t("dGPU memory quota", "开启单卡 dGPU 显存切分"),
             Kind::Sandbox => t("Keep session on close", "关闭窗口后后台常驻"),
             Kind::Workbench => t("Require single approval", "敏感命令需单次确认"),
+            Kind::Klang => t("Prove checkfree bounds", "强制 checkfree 边界消除证明"),
         };
         let toggle =
             cx.new(|cx| Switch::new("kense-policy-switch", toggle_label, w, cx).with_checked(true));
 
         let seg_sub = cx.subscribe(&segmented, |this, _, ev: &GlassSegmentChanged, cx| {
             this.mode_index = match ev.0.as_ref() {
-                "mcp" | "microvm" | "high" => 1,
-                "a2a" | "pool" | "max" => 2,
+                "mcp" | "microvm" | "high" | "wasi" => 1,
+                "a2a" | "pool" | "max" | "tinycc" => 2,
                 _ => 0,
             };
             this.blocked_alert = false;
@@ -273,7 +289,7 @@ impl Scene {
 
     fn secondary_action(&mut self, cx: &mut Context<Self>) {
         match self.kind {
-            Kind::Sandbox => {
+            Kind::Sandbox | Kind::Klang => {
                 self.blocked_alert = true;
                 self.running = false;
                 self.phase = 2;
@@ -316,6 +332,12 @@ impl Scene {
                 if zh { "生成方案" } else { "Plan" },
                 if zh { "单次确认" } else { "Approval" },
                 if zh { "保存历史" } else { "Saved" },
+            ],
+            Kind::Klang => [
+                if zh { "解析 .k" } else { "Parse .k" },
+                if zh { "生命周期" } else { "Lifetimes" },
+                if zh { "边界证明" } else { "Bounds BCE" },
+                if zh { "产物就绪" } else { "Emitted" },
             ],
         }
     }
@@ -476,6 +498,63 @@ impl Scene {
                     ),
                 ]
             }
+            Kind::Klang => {
+                let target = match (zh, self.mode_index) {
+                    (true, 0) => "k build -O3 · C 后端 + 工作线程队列",
+                    (true, 1) => "k build --target wasm32-wasip1 · Wasmtime",
+                    (true, _) => "k run gateway.k · TinyCC 进程内直跑",
+                    (false, 0) => "k build -O3 · C backend + worker queues",
+                    (false, 1) => "k build --target wasm32-wasip1 · Wasmtime",
+                    (false, _) => "k run gateway.k · in-process TinyCC",
+                };
+                let check = if self.blocked_alert {
+                    if zh {
+                        "返回局部数据栈引用 -> 编译期拒绝 (lifetime escape)"
+                    } else {
+                        "return local stack ref -> rejected (lifetime escape)"
+                    }
+                } else if self.flag_on {
+                    if zh {
+                        "数据栈作用域回收 · checkfree 零越界检查"
+                    } else {
+                        "scope-exit data stack · checkfree zero bounds checks"
+                    }
+                } else if zh {
+                    "数据栈作用域回收 · 保留动态边界检查"
+                } else {
+                    "scope-exit data stack · runtime bounds checks kept"
+                };
+                [
+                    (
+                        if zh {
+                            "编译目标与后端"
+                        } else {
+                            "Target & backend"
+                        },
+                        target.into(),
+                    ),
+                    (
+                        if zh {
+                            "生命周期与边界"
+                        } else {
+                            "Lifetimes & BCE"
+                        },
+                        check.into(),
+                    ),
+                    (
+                        if zh {
+                            "Cordis 服务锁"
+                        } else {
+                            "Cordis lock"
+                        },
+                        if zh {
+                            format!("cordis.lock 已验证 · onnx-gateway #{:02}", self.runs)
+                        } else {
+                            format!("cordis.lock verified · onnx-gateway #{:02}", self.runs)
+                        },
+                    ),
+                ]
+            }
         }
     }
 }
@@ -522,10 +601,27 @@ impl Render for Scene {
                 ),
                 "kwork + kui gpui",
             ),
+            Kind::Klang => (
+                t(
+                    "k build gateway.k · check lifetimes & Cordis lock",
+                    "k build gateway.k · 检查引用生命周期与 Cordis 锁",
+                ),
+                t(
+                    "K · Systems Compiler & Cordis",
+                    "K 语言 · 系统编译器与 Cordis 微内核",
+                ),
+                "k v0.1 · .k -> C / WASI / TinyCC",
+            ),
         };
 
         let status_badge = if self.blocked_alert {
-            (t("Blocked", "越界已阻断"), p.danger)
+            (
+                match self.kind {
+                    Kind::Klang => t("Rejected", "编译期拒绝"),
+                    _ => t("Blocked", "越界已阻断"),
+                },
+                p.danger,
+            )
         } else if self.awaiting_approval {
             (t("Approval", "等待确认"), p.bright)
         } else if self.running {
@@ -538,9 +634,11 @@ impl Render for Scene {
             Kind::Gateway => t("Deploy model", "一键部署模型"),
             Kind::Sandbox => t("Dispatch to machine", "派发到该机器"),
             Kind::Workbench => t("Run task", "发送任务"),
+            Kind::Klang => t("Compile & check", "编译并检查"),
         };
         let secondary_label = match self.kind {
             Kind::Sandbox => t("Test path block", "模拟敏感目录阻断"),
+            Kind::Klang => t("Test ref escape", "模拟悬垂引用检查"),
             Kind::Workbench if self.awaiting_approval => t("Approve once", "批准本次执行"),
             _ => t("Next step", "切换步骤"),
         };

@@ -172,6 +172,8 @@ const CORAL: Rgb = hex(0xF87171);
 const TEAL: Rgb = hex(0x14B8A6);
 const VIOLET: Rgb = hex(0x7C3AED);
 const SLATE: Rgb = hex(0x64748B);
+const RUBY: Rgb = hex(0xE11D48);
+const ROSE_SOFT: Rgb = hex(0xFDA4AF);
 
 #[derive(Clone, Copy)]
 struct Mat4([f32; 16]);
@@ -809,6 +811,7 @@ enum SceneKind {
     ClayRelease,
     ClayRust,
     Studio,
+    Klang,
 }
 
 impl SceneKind {
@@ -821,6 +824,7 @@ impl SceneKind {
             "clay-shield" => Self::ClayShield,
             "clay-release" => Self::ClayRelease,
             "studio" => Self::Studio,
+            "klang" => Self::Klang,
             _ => Self::ClayRust,
         }
     }
@@ -835,6 +839,7 @@ impl SceneKind {
             Self::ClayRelease => (-0.17, 0.21, 2.32),
             Self::ClayRust => (0.19, 0.15, 2.42),
             Self::Studio => (0.24, 0.17, 3.12),
+            Self::Klang => (-0.25, 0.18, 3.08),
         }
     }
 }
@@ -1562,6 +1567,124 @@ fn build_studio_scene(gl: &GL) -> Result<SceneMeshes> {
     })
 }
 
+fn build_klang_scene(gl: &GL) -> Result<SceneMeshes> {
+    let mut sh = MeshBuilder::new();
+    sh.ground_shadow(-1.34, 2.62, 1.30);
+
+    // Part 0: Machined Compiler Slate + Data-Stack Scope & 3-Target Backend Display
+    let mut slate = MeshBuilder::new();
+    slate.bevel_box(
+        0.26, 0.06, -0.04, 3.12, 1.98, 0.28, 0.20, 0.04, SILVER, MAT_ALLOY,
+    );
+    slate.bevel_box(
+        0.26, 0.06, 0.09, 2.86, 1.72, 0.08, 0.14, 0.02, OBSIDIAN, MAT_ENAMEL,
+    );
+    for &(bx, by) in &[(-1.08, 0.80), (1.60, 0.80), (-1.08, -0.68), (1.60, -0.68)] {
+        slate.bevel_disc(bx, by, 0.125, 0.05, 0.045, 0.014, SILVER_DEEP, MAT_ALLOY);
+    }
+    slate.decal(0.26, 0.06, 0.134, 2.66, 1.52, 0.10, PORCELAIN, MAT_DISPLAY);
+    // Top compiler bar + .k badge + checkfree pill
+    slate.decal(0.26, 0.62, 0.138, 2.42, 0.22, 0.06, PAPER, MAT_DISPLAY);
+    slate.decal(-0.78, 0.62, 0.142, 0.09, 0.09, 0.045, RUBY, MAT_DISPLAY);
+    slate.decal(-0.30, 0.62, 0.142, 0.66, 0.06, 0.03, UI_INK, MAT_DISPLAY);
+    slate.decal(1.18, 0.62, 0.142, 0.42, 0.12, 0.06, MINT, MAT_DISPLAY);
+
+    // Left pane: .k source + lexical data-stack lifetime scope rail
+    slate.decal(-0.34, -0.12, 0.138, 1.22, 1.08, 0.07, PAPER, MAT_DISPLAY);
+    slate.decal(-0.80, -0.12, 0.142, 0.04, 0.78, 0.02, SAPPHIRE, MAT_DISPLAY);
+    slate.decal(-0.46, 0.24, 0.142, 0.46, 0.06, 0.03, VIOLET, MAT_DISPLAY);
+    slate.decal(-0.34, 0.06, 0.142, 0.72, 0.055, 0.025, UI_INK, MAT_DISPLAY);
+    slate.decal(
+        -0.38,
+        -0.12,
+        0.142,
+        0.62,
+        0.055,
+        0.025,
+        UI_LINE,
+        MAT_DISPLAY,
+    );
+    slate.decal(-0.30, -0.30, 0.142, 0.78, 0.055, 0.025, TEAL, MAT_DISPLAY);
+    slate.decal(-0.52, -0.48, 0.142, 0.34, 0.11, 0.055, EMERALD, MAT_DISPLAY);
+
+    // Right pane: 3 shared-checker targets (Native C, WASI, TinyCC)
+    for (idx, accent) in [SAPPHIRE, TEAL, AMBER].into_iter().enumerate() {
+        let ty = 0.22 - (idx as f32) * 0.34;
+        slate.decal(0.96, ty, 0.138, 1.04, 0.28, 0.06, PAPER, MAT_DISPLAY);
+        slate.decal(0.58, ty, 0.142, 0.16, 0.12, 0.05, accent, MAT_DISPLAY);
+        slate.decal(
+            0.98,
+            ty + 0.04,
+            0.142,
+            0.48,
+            0.05,
+            0.025,
+            UI_INK,
+            MAT_DISPLAY,
+        );
+        slate.decal(
+            0.94,
+            ty - 0.05,
+            0.142,
+            0.40,
+            0.04,
+            0.02,
+            UI_LINE,
+            MAT_DISPLAY,
+        );
+        slate.decal(1.36, ty, 0.142, 0.065, 0.065, 0.032, EMERALD, MAT_DISPLAY);
+    }
+    slate.decal(0.26, 0.06, 0.146, 2.66, 1.52, 0.10, PAPER, MAT_GLASS);
+
+    // Part 1: Floating Tactile `.k` Compiler Core Monolith (Bot fusion host!)
+    let mut core_tile = MeshBuilder::new();
+    core_tile.bevel_box(
+        -1.46, -0.20, 0.18, 1.06, 1.06, 0.20, 0.20, 0.035, SILVER, MAT_ALLOY,
+    );
+    core_tile.bevel_box(
+        -1.46, -0.20, 0.28, 0.92, 0.92, 0.20, 0.18, 0.035, RUBY, MAT_ENAMEL,
+    );
+
+    let mut sym = MeshBuilder::new();
+    sym.decal(-0.15, 0.0, 0.0, 0.11, 0.46, 0.03, PAPER, MAT_DISPLAY);
+    sym.with_xform(
+        Mat4::translate(0.06, 0.105, 0.0).mul(Mat4::rot_z(0.76)),
+        |m| {
+            m.decal(0.0, 0.0, 0.0, 0.32, 0.105, 0.03, ROSE_SOFT, MAT_DISPLAY);
+        },
+    );
+    sym.with_xform(
+        Mat4::translate(0.06, -0.105, 0.0).mul(Mat4::rot_z(-0.76)),
+        |m| {
+            m.decal(0.0, 0.0, 0.0, 0.32, 0.105, 0.03, PAPER, MAT_DISPLAY);
+        },
+    );
+
+    // Part 2: Floating Cordis Lock Frame & Verified `checkfree` Medallion
+    let mut cordis = MeshBuilder::new();
+    cordis.hollow_frame(
+        1.58, 0.80, 0.32, 0.48, 0.48, 0.14, 0.10, 0.12, SAPPHIRE, MAT_ENAMEL,
+    );
+    cordis.verified_medallion(1.74, -0.62, 0.38, 0.35);
+
+    Ok(SceneMeshes {
+        shadow: GpuPart::upload(gl, &sh, false)?,
+        parts: vec![
+            GpuPart::upload(gl, &slate, true)?,
+            GpuPart::upload(gl, &core_tile, true)?,
+            GpuPart::upload(gl, &cordis, true)?,
+        ],
+        host: FusionHost {
+            part_idx: 1,
+            local_anchor: [-1.46, -0.20, 0.392],
+            world_w: 0.92,
+            eye_w: 0.38,
+            symbols: GpuPart::upload(gl, &sym, false)?,
+            eyes: make_eyes(gl, 0.38, PAPER)?,
+        },
+    })
+}
+
 struct GlPipeline {
     gl: GL,
     gl_canvas: HtmlCanvasElement,
@@ -1573,7 +1696,7 @@ struct GlPipeline {
     u_mvp: WebGlUniformLocation,
     u_model: WebGlUniformLocation,
     u_dark: WebGlUniformLocation,
-    scenes: [SceneMeshes; 8],
+    scenes: [SceneMeshes; 9],
 }
 
 fn compile_shader(gl: &GL, ty: u32, src: &str) -> Result<WebGlShader> {
@@ -1645,6 +1768,7 @@ impl GlPipeline {
             build_clay_release(&gl)?,
             build_clay_rust(&gl)?,
             build_studio_scene(&gl)?,
+            build_klang_scene(&gl)?,
         ];
 
         Ok(Self {
@@ -1773,6 +1897,14 @@ impl GlPipeline {
                 (SceneKind::Studio, 2) => {
                     let bob = (t * 1.6 + 1.1).cos() * 0.045 + hov * 0.07;
                     Mat4::translate(ex * 0.30, bob, hov * 0.05)
+                }
+                (SceneKind::Klang, 1) => {
+                    let bob = (t * 1.55).sin() * 0.045 + hov * 0.08;
+                    Mat4::translate(-ex * 0.36 + hov * 0.08, bob, hov * 0.07)
+                }
+                (SceneKind::Klang, 2) => {
+                    let bob = (t * 1.75 + 0.8).cos() * 0.055 + hov * 0.07;
+                    Mat4::translate(ex * 0.28, bob, hov * 0.05).mul(Mat4::rot_z(hov * 0.07))
                 }
                 _ => Mat4::identity(),
             };

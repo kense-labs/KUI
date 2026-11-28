@@ -15,6 +15,14 @@ fn path(en: bool) -> &'static str {
     if en { "/en" } else { "" }
 }
 
+fn klang_site(en: bool) -> &'static str {
+    if en {
+        "https://kense-labs.github.io/klang/"
+    } else {
+        "https://kense-labs.github.io/klang/README.zh-CN.html"
+    }
+}
+
 fn component_count() -> usize {
     kui_catalog::items()
         .filter(|(id, _, _)| *id != "kui-foundation")
@@ -117,8 +125,8 @@ fn product_popover(en: bool) -> String {
             name: "KStack",
             stack: tr(
                 en,
-                "40 MB · GPU Scheduler & MaaS",
                 "40 MB · 算力调度与模型服务",
+                "40 MB · GPU Scheduler & MaaS",
             ),
             summary: tr(
                 en,
@@ -165,8 +173,8 @@ fn product_popover(en: bool) -> String {
             name: "KWork",
             stack: tr(
                 en,
-                "Rust · KUI · GPUI · Desktop",
                 "Rust · KUI · GPUI · 桌面端",
+                "Rust · KUI · GPUI · Desktop",
             ),
             summary: tr(
                 en,
@@ -198,6 +206,29 @@ fn product_popover(en: bool) -> String {
             href: &kui_href,
             external: false,
             cta: tr(en, "进入 KUI 组件站", "Open KUI"),
+        },
+        Spec {
+            id: "klang",
+            name: tr(en, "K 语言", "K Language"),
+            stack: "klang · .k · Native + WASI + TinyCC",
+            summary: tr(
+                en,
+                "内存安全的系统编程语言，编译期检查引用生命周期并在作用域退出时回收数据栈存储；一套前端支持本机可执行文件、WASI 模块与 TinyCC 进程内运行。",
+                "Memory-safe systems language with checked reference lifetimes, scope-exit data stacks, Cordis services, and native, WASI, and TinyCC targets.",
+            ),
+            metrics: [
+                tr(en, "生命周期检查", "Checked lifetimes"),
+                "Native + WASI",
+                tr(en, "Cordis 微内核", "Cordis kernel"),
+            ],
+            cmd: Some((
+                "curl -fsSL https://raw.githubusercontent.com/kense-labs/klang/main/scripts/install.sh | sh",
+                "curl -fsSL …/klang/…/install.sh | sh",
+            )),
+            note: "",
+            href: klang_site(en),
+            external: false,
+            cta: tr(en, "打开 K 语言站点", "Open K Language"),
         },
         Spec {
             id: "kbox",
@@ -333,6 +364,20 @@ fn hero_flip_hint(en: bool) -> String {
             tr(en, "Rust + GPUI 组件库", "Desktop + WebAssembly"),
             kui_desc.as_str(),
         ),
+        (
+            "klang",
+            tr(en, "K 语言", "K Language"),
+            tr(
+                en,
+                "系统编程 · Native & WASI",
+                ".k · Native · WASI · TinyCC",
+            ),
+            tr(
+                en,
+                "编译期检查引用生命周期，在地址稳定的数据栈上管理可增长值；共享检查器生成本机程序、WASI 模块或经 TinyCC 即时运行。",
+                "Checks reference lifetimes at compile time with address-stable data stacks, building native binaries, WASI modules, or running via TinyCC.",
+            ),
+        ),
     ];
 
     let mut cards = String::new();
@@ -407,6 +452,18 @@ fn hero_solution_belt(en: bool, prefix: &str) -> String {
                 en,
                 "一套 Rust + GPUI 源码构建桌面与浏览器界面",
                 "Shared Rust + GPUI component library for desktop and web",
+            ),
+        ),
+        (
+            "klang",
+            format!("{prefix}/#products-klang"),
+            false,
+            tr(en, "K 系统编程语言", "K Language"),
+            tr(en, "K 语言", "K Language"),
+            tr(
+                en,
+                "编译期引用生命周期检查与数据栈内存安全的系统编程语言",
+                "Memory-safe systems language with checked lifetimes & C/WASI targets",
             ),
         ),
     ];
@@ -498,8 +555,8 @@ fn guide_widget(en: bool) -> String {
         (
             format!("{prefix}/#products"),
             "box",
-            tr(en, "浏览四款核心产品", "Core Products"),
-            "KStack · KStudio",
+            tr(en, "浏览五款核心产品", "Core Products"),
+            "K · KStack",
         ),
         (
             format!("{prefix}/#experience"),
@@ -510,7 +567,7 @@ fn guide_widget(en: bool) -> String {
         (
             format!("{prefix}/#architecture"),
             "layers",
-            tr(en, "四款产品怎么配合", "How They Fit"),
+            tr(en, "五款产品怎么配合", "How They Fit"),
             "Stack",
         ),
         (
@@ -583,12 +640,17 @@ fn guide_widget(en: bool) -> String {
     )
 }
 
-fn docs_product_strip(prefix: &str) -> String {
+fn docs_product_strip(en: bool, prefix: &str) -> String {
     let items = [
         ("kstack", "KStack", format!("{prefix}/docs/#kstack")),
         ("kstudio", "KStudio", format!("{prefix}/docs/#kstudio")),
         ("kwork", "KWork", format!("{prefix}/docs/#kwork")),
         ("kui", "KUI", format!("{prefix}/kui/")),
+        (
+            "klang",
+            tr(en, "K 语言", "K Language"),
+            format!("{prefix}/docs/#klang"),
+        ),
     ];
 
     let mut out = String::from(
@@ -658,16 +720,16 @@ pub fn page(en: bool, rev: &str) -> String {
         h_suffix = tr(en, "自研软件栈", "built to work together"),
         lead = tr(
             en,
-            "KStack 调度多云异构 GPU 与模型服务，KStudio 接管你名下的每一台机器，KWork 处理日常桌面任务，KUI 用同一份 Rust + GPUI 源码构建原生与网页界面。",
-            "KStack schedules GPUs and serves models across clouds, KStudio manages every machine you own in one window, KWork handles daily desktop tasks, and KUI builds native and web UI from one Rust + GPUI codebase."
+            "K 语言用编译期生命周期检查构建系统与推理组件，KStack 调度多云异构 GPU 与模型服务，KStudio 接管你名下的每一台机器，KWork 处理日常桌面任务，KUI 用同一份 Rust + GPUI 源码构建原生与网页界面。",
+            "K builds memory-safe systems and inference components, KStack schedules GPUs and serves models across clouds, KStudio manages every machine you own in one window, KWork handles daily desktop tasks, and KUI builds native and web UI from one Rust + GPUI codebase."
         ),
         explore = svg::action_content(tr(en, "浏览核心产品", "Explore products")),
         open_kui = tr(en, "进入 KUI 组件站", "Open KUI"),
         read_docs = tr(en, "产品文档", "Documentation"),
         h1_hint = tr(
             en,
-            "向下查看 KStack、KStudio、KWork 与 KUI",
-            "Inspect KStack, KStudio, KWork, and KUI"
+            "向下查看 KStack、KStudio、KWork、KUI 与 K 语言",
+            "Inspect KStack, KStudio, KWork, KUI, and K"
         ),
         h1_body = tr(
             en,
@@ -681,7 +743,7 @@ pub fn page(en: bool, rev: &str) -> String {
         },
         h3_hint = tr(
             en,
-            "查看四款核心产品与底层中间件文档",
+            "查看五款核心产品与底层中间件文档",
             "Browse product guides and middleware notes"
         ),
         dock = hero_command_dock(en),
@@ -747,6 +809,19 @@ pub fn page(en: bool, rev: &str) -> String {
           </div>
         </div>
       </article>
+      <article class="kense-family-item" id="products-klang" data-family-berth="klang" data-solid-entrance="pending">
+        <div class="kense-solid" data-kense-solid="klang" aria-hidden="true">{f_klang}<canvas width="760" height="570"></canvas></div>
+        <div class="kense-family-copy kense-reveal">
+          <h3>{h_klang}</h3>
+          <p>{p_klang}</p>
+          <p class="kense-family-detail">{d_klang}</p>
+          <div class="kense-family-links">
+            <a class="kense-pill kense-pill--outline" href="{klang_url}" data-product-badge="klang" data-kense-hint="{hint_klang}">{act_klang}</a>
+            <a class="kense-inline-link" href="{prefix}/#experience-klang" data-kense-hint="{hint_klang_demo}">{act_klang_demo}</a>
+            <a class="kense-inline-link" href="https://github.com/kense-labs/klang" target="_blank" rel="noreferrer" data-kense-hint="{hint_klang_gh}">GitHub</a>
+          </div>
+        </div>
+      </article>
     </div>
     <div class="kense-middleware kense-reveal" id="middleware">
       <div class="kense-middleware-head">
@@ -766,11 +841,11 @@ pub fn page(en: bool, rev: &str) -> String {
     </div>
   </div>
 </section>"##,
-        title = tr(en, "四款核心产品", "Four core products"),
+        title = tr(en, "五款核心产品", "Five core products"),
         desc = tr(
             en,
-            "每款产品都能单独拿来解决具体问题；放在一起时，从机房里的异构 GPU 集群一直连到你桌上的原生窗口。",
-            "Each product solves a concrete job on its own, and fits cleanly with the others from rack-scale GPUs to your desktop."
+            "每款产品都能单独拿来解决具体问题；放在一起时，从底层系统编程语言与异构 GPU 集群一直连到你桌上的原生窗口。",
+            "Each product solves a concrete job on its own, and fits cleanly with the others from systems code and rack-scale GPUs to your desktop."
         ),
         f_runtime = svg::solid_fallback("runtime"),
         h_kstack = tr(
@@ -898,6 +973,40 @@ pub fn page(en: bool, rev: &str) -> String {
             "查看 Cargo 引入与 kui add 源码安装步骤",
             "Read Cargo dependency and kui add setup steps"
         ),
+        f_klang = svg::solid_fallback("klang"),
+        h_klang = tr(
+            en,
+            "K 语言 · 内存安全的系统编程语言",
+            "K · Memory-Safe Systems Programming Language"
+        ),
+        p_klang = tr(
+            en,
+            "面向操作系统组件、云服务与 AI 基础设施设计的系统编程语言，命令行工具为 k，源文件扩展名为 .k。编译器在编译期检查引用生命周期并消除可证明安全的边界检查；可增长的局部值放在地址稳定的数据栈上，作用域退出即回收存储，没有垃圾回收停顿。",
+            "A systems programming language built for OS components, cloud services, and AI infrastructure, with the k CLI and .k source files. The compiler checks reference lifetimes and eliminates proven bounds checks ahead of time, storing growable values on address-stable data stacks reclaimed at scope exit without GC pauses."
+        ),
+        d_klang = tr(
+            en,
+            "同一套前端与类型检查器覆盖三条执行路径：经 C 后端构建支持工作线程与类型化队列的本机可执行文件、生成在 Wasmtime 运行的 WASI WebAssembly 模块，或经内置 TinyCC 在当前进程直接运行；配合 Cordis 微内核用经验证的服务锁装配云端推理网关等宿主服务。",
+            "One checker drives three execution paths: native executables with worker threads and typed queues via the C backend, WASI WebAssembly modules verified on Wasmtime, and in-process runs via TinyCC—paired with the Cordis microkernel for verified host service graphs such as cloud inference gateways."
+        ),
+        klang_url = klang_site(en),
+        act_klang = svg::action_content(tr(en, "访问 K 语言站点", "Explore K Language")),
+        hint_klang = tr(
+            en,
+            "打开 K 语言官网：架构图解、语言参考与性能基准",
+            "Open K language site: architecture, reference & benchmarks"
+        ),
+        act_klang_demo = tr(en, "体验编译检查面板", "Try compiler demo"),
+        hint_klang_demo = tr(
+            en,
+            "在下方 GPUI 面板中体验生命周期检查与多目标编译",
+            "Test lifetime checks and target selection in the GPUI panel"
+        ),
+        hint_klang_gh = tr(
+            en,
+            "查看 kense-labs/klang 编译器与运行时仓库",
+            "Inspect kense-labs/klang compiler & runtime source on GitHub"
+        ),
         mw_title = tr(en, "底层运行时中间件", "Runtime middleware"),
         mw_sub = tr(
             en,
@@ -931,6 +1040,7 @@ pub fn page(en: bool, rev: &str) -> String {
       {tab_gw}
       {tab_sb}
       {tab_ui}
+      {tab_klang}
     </div>
     <div class="kense-exp-stage kense-reveal">
       <div class="kense-exp-copy-stack">
@@ -964,6 +1074,16 @@ pub fn page(en: bool, rev: &str) -> String {
           </ul>
           <a class="kense-pill kense-pill--solid" href="{prefix}/kui/" data-product-badge="kui" data-kense-hint="{ui_hint}">{ui_cta}</a>
         </div>
+        <div id="experience-klang" class="kense-exp-copy" role="tabpanel" aria-labelledby="kense-tab-klang" data-kense-panel="klang" data-gpui-story="kense-klang" hidden>
+          <h3>{kl_h}</h3>
+          <p>{kl_p}</p>
+          <ul class="kense-exp-points">
+            <li><p>{kl_b1}</p></li>
+            <li><p>{kl_b2}</p></li>
+            <li><p>{kl_b3}</p></li>
+          </ul>
+          <a class="kense-pill kense-pill--solid" href="{kl_url}" data-product-badge="klang" data-kense-hint="{kl_hint}">{kl_cta}</a>
+        </div>
       </div>
       <div class="kense-exp-media" data-kense-gpui-slot>
         <div class="kense-gpui-shell">
@@ -980,8 +1100,8 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         desc = tr(
             en,
-            "右侧不是静态截图，而是编译成 WebAssembly 实时运行的 GPUI 实例。切换选项卡或点击面板按钮，直接试试 KStack 选卡调度、KStudio 隔离运行与 KWork 工具确认。",
-            "The panel on the right is a real Rust + GPUI WebAssembly instance. Switch tabs or click controls to test KStack GPU placement, KStudio isolated boxes, and KWork tool approvals."
+            "右侧不是静态截图，而是编译成 WebAssembly 实时运行的 GPUI 实例。切换选项卡或点击面板按钮，直接试试 KStack 选卡调度、KStudio 隔离运行、KWork 工具确认与 K 语言编译检查。",
+            "The panel on the right is a real Rust + GPUI WebAssembly instance. Switch tabs or click controls to test KStack GPU placement, KStudio isolated boxes, KWork tool approvals, and K compiler checks."
         ),
         tablist_label = tr(en, "核心产品交互演示", "Interactive product scenarios"),
         gpui_label = tr(en, "实时 GPUI 交互面板", "Live GPUI interactive panel"),
@@ -1017,6 +1137,17 @@ pub fn page(en: bool, rev: &str) -> String {
                 )
             ),
             tr(en, "KWork 会话与授权", "KWork Workspace")
+        ),
+        tab_klang = button(
+            &format!(
+                r#"id="kense-tab-klang" class="kense-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="experience-klang" data-kense-tab="klang" data-gpui-story="kense-klang" data-kense-hint="{}""#,
+                tr(
+                    en,
+                    "切换至 K 语言生命周期检查与多目标构建面板",
+                    "Switch to K lifetime verification & target build"
+                )
+            ),
+            tr(en, "K 语言编译与验证", "K Compiler")
         ),
         gw_h = tr(
             en,
@@ -1111,6 +1242,38 @@ pub fn page(en: bool, rev: &str) -> String {
         } else {
             format!("在浏览器内交互体验全部 {count} 个 KUI 组件")
         },
+        kl_h = tr(
+            en,
+            "编译期查清引用生命周期<br>一套检查器输出本机与 WASI",
+            "Check lifetimes ahead of time<br>Emit native C, WASI, or TinyCC"
+        ),
+        kl_p = tr(
+            en,
+            "K 把可增长的局部值放在地址稳定的数据栈上，作用域退出即回收，省去垃圾回收停顿；同一份检查后的特化程序可按需输出本机二进制、WASI 模块或进程内直跑。",
+            "K stores growable local values on address-stable data stacks reclaimed at scope exit without GC pauses, feeding one checked program into native C, WASI modules, or in-process TinyCC."
+        ),
+        kl_b1 = tr(
+            en,
+            "编译期验证引用根、所有权转移与跨 await 挂起点存活的值",
+            "Validates reference roots, ownership transfers, and values live across await"
+        ),
+        kl_b2 = tr(
+            en,
+            "结合控制流与别名分析证明并消除边界检查（checkfree），直接对接 C ABI",
+            "Proves checkfree bounds elimination and links directly with native C ABIs"
+        ),
+        kl_b3 = tr(
+            en,
+            "Cordis 微内核用经验证的服务锁装配推理网关与可选宿主服务",
+            "Cordis microkernel composes verified service graphs for inference gateways"
+        ),
+        kl_url = klang_site(en),
+        kl_cta = svg::action_content(tr(en, "访问 K 语言站点", "Open K Language")),
+        kl_hint = tr(
+            en,
+            "打开 K 语言官网查看架构、语法规范与性能基准",
+            "Open K language docs, spec, and benchmarks"
+        ),
     );
 
     // Section 4: Borderless Porcelain Plinth Bento + 3D Bot-Fusion Sculptures (#capabilities)
@@ -1244,7 +1407,7 @@ pub fn page(en: bool, rev: &str) -> String {
             <span class="kense-eco-core-mark">{ico_kstack}</span>
             <strong>Kense</strong>
             <span>{core_sub}</span>
-            <small>SSH · MCP · /v1 API</small>
+            <small>SSH · Cordis · /v1 API</small>
           </div>
         </div>
         {conn_right}
@@ -1255,6 +1418,12 @@ pub fn page(en: bool, rev: &str) -> String {
             <p class="kense-eco-tags">NVIDIA · AMD · Ascend · PPU · Hygon · Apple</p>
             <p class="kense-eco-note">{r1_n}</p>
             <a class="kense-inline-action" href="{prefix}/docs/#kstack" data-product-badge="kstack">{r1_cta}</a>
+          </article>
+          <article class="kense-eco-card" data-product-badge="klang">
+            <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_klang_card}</span><h3>{r_klang_h}</h3></div>
+            <p class="kense-eco-tags">.k · Lifetimes · Native · WASI · Cordis</p>
+            <p class="kense-eco-note">{r_klang_n}</p>
+            <a class="kense-inline-action" href="{r_klang_href}" data-product-badge="klang">{r_klang_cta}</a>
           </article>
           <article class="kense-eco-card" data-product-badge="kbox">
             <div class="kense-eco-card-head"><span class="kense-eco-icon">{ico_kbox}</span><h3>{r2_h}</h3></div>
@@ -1279,19 +1448,23 @@ pub fn page(en: bool, rev: &str) -> String {
     </div>
   </div>
 </section>"##,
-        title = tr(en, "四款产品如何分工配合", "How the products fit together"),
+        title = tr(en, "五款产品如何分工配合", "How the products fit together"),
         desc = tr(
             en,
-            "桌面端用 KStudio 管机器、用 KWork 跑日常任务，界面由 KUI 构建；后端模型推理交给 KStack 统一调度，需要隔离环境时调用底层的 KBox 与 KSandbox。",
-            "Use KStudio to manage machines and KWork for daily tasks, both built with KUI; route model inference through KStack and isolate execution with KBox and KSandbox."
+            "桌面端用 KStudio 管机器、用 KWork 跑日常任务，界面由 KUI 构建；底层系统组件与 Cordis 服务用 K 语言编写，模型推理交给 KStack 统一调度，隔离环境由 KBox 与 KSandbox 提供。",
+            "Use KStudio to manage machines and KWork for daily tasks, both built with KUI; write memory-safe system modules and Cordis services in K, route model inference through KStack, and isolate execution with KBox and KSandbox."
         ),
         eco_label = tr(
             en,
-            "KStudio、KWork、KUI 与 KStack 及底层运行时中间件的配合关系",
-            "How KStudio, KWork, KUI, KStack, and runtime middleware connect"
+            "KStudio、KWork、KUI 与 KStack、K 语言及底层运行时中间件的配合关系",
+            "How KStudio, KWork, KUI, KStack, K, and runtime middleware connect"
         ),
         left_lbl = tr(en, "桌面端与跨端界面", "Desktop Apps & UI"),
-        right_lbl = tr(en, "模型算力与隔离中间件", "Model Serving & Middleware"),
+        right_lbl = tr(
+            en,
+            "算力调度、系统语言与隔离环境",
+            "Compute, Systems Language & Isolation"
+        ),
         l1_h = tr(en, "KStudio · 多机终端", "KStudio · Multi-Machine Hub"),
         l1_n = tr(
             en,
@@ -1316,6 +1489,7 @@ pub fn page(en: bool, rev: &str) -> String {
         ico_ui = svg::product_emblem("kui"),
         ico_kstack = svg::product_emblem("kstack"),
         ico_kstack_card = svg::product_emblem("kstack"),
+        ico_klang_card = svg::product_emblem("klang"),
         ico_kbox = svg::product_emblem("kbox"),
         core_sub = tr(en, "连接协议", "Protocols"),
         conn_right = svg::topology_connector(false),
@@ -1326,6 +1500,18 @@ pub fn page(en: bool, rev: &str) -> String {
             "Pools bare-metal and cloud GPUs with upfront VRAM estimates and /v1 serving"
         ),
         r1_cta = svg::action_content(tr(en, "了解 KStack", "About KStack")),
+        r_klang_h = tr(
+            en,
+            "K 语言 · 系统与服务组件",
+            "K · Systems & Cordis Services"
+        ),
+        r_klang_n = tr(
+            en,
+            "用编译期生命周期检查与数据栈构建底层系统模块、WASI 组件与 Cordis 推理网关",
+            "Builds memory-safe system modules, WASI commands, and Cordis gateways with checked lifetimes"
+        ),
+        r_klang_href = klang_site(en),
+        r_klang_cta = svg::action_content(tr(en, "访问 K 语言站点", "Explore K Language")),
         r2_h = tr(
             en,
             "KBox & KSandbox · 运行时中间件",
@@ -1418,6 +1604,17 @@ pub fn page(en: bool, rev: &str) -> String {
             tr(en, "核心产品 · 跨端组件库", "Product · UI Library"),
             kui_dir_desc.as_str(),
             kui_dir_href.as_str(),
+        ),
+        (
+            "klang",
+            tr(en, "K 语言", "K Language"),
+            tr(en, "核心产品 · 系统编程语言", "Product · Systems Language"),
+            tr(
+                en,
+                "编译期引用生命周期检查与地址稳定数据栈，一套前端覆盖本机 C、WASI 与 TinyCC 即时运行",
+                "Memory-safe systems language with checked reference lifetimes, data stacks, Cordis services, and C/WASI/TinyCC targets",
+            ),
+            klang_site(en),
         ),
         (
             "kbox",
@@ -1525,7 +1722,7 @@ pub fn page(en: bool, rev: &str) -> String {
           {art_os}
           <div class="kense-access-actions">
             <a class="kense-pill kense-pill--solid" href="{prefix}/docs/#kstack" data-product-badge="kstack">{a1_primary}</a>
-            <a class="kense-inline-link" href="{prefix}/#experience">{a1_link}</a>
+            <a class="kense-inline-link" href="{a1_klang_href}" data-product-badge="klang">{a1_klang}</a>
           </div>
         </div>
       </article>
@@ -1561,22 +1758,23 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         desc = tr(
             en,
-            "可以把几台分散的 GPU 服务器并成推理池，也可以在一个窗口里管好所有开发机，或者直接拿 KUI 写桌面与网页界面。",
-            "Pool scattered GPUs into one serving cluster, manage all your dev machines in one app, or build Rust + GPUI interfaces."
+            "可以把几台分散的 GPU 服务器并成推理池、用 K 语言写内存安全的系统组件，也可以在一个窗口里管好所有开发机，或者直接拿 KUI 写跨端界面。",
+            "Pool scattered GPUs into one serving cluster, write memory-safe systems services in K, manage dev machines in one app, or build Rust + GPUI interfaces."
         ),
         a1_h = tr(
             en,
-            "调度 GPU 与部署模型 · KStack",
-            "Pool GPUs & serve models · KStack"
+            "模型算力与系统编程 · KStack & K",
+            "GPU serving & systems · KStack & K"
         ),
         a1_p = tr(
             en,
-            "查看 KStack 如何把自有服务器、多云主机和 Kubernetes 集群并入同一个算力池，在异构加速卡上一键拉起模型服务。",
-            "See how KStack unifies bare-metal, cloud instances, and Kubernetes clusters for one-click model serving across GPU vendors."
+            "用 KStack 把自有机房与多云加速卡并成统一推理池，或用内存安全的 K 语言构建高性能系统组件、WASI 模块与 Cordis 推理网关。",
+            "Unify bare-metal and cloud GPUs for /v1 model serving in KStack, or build memory-safe systems modules, WASI commands, and Cordis gateways in K."
         ),
         art_os = svg::access_graphic("os"),
         a1_primary = svg::action_content(tr(en, "查看 KStack 说明", "KStack overview")),
-        a1_link = tr(en, "体验选卡面板", "Live demo"),
+        a1_klang_href = klang_site(en),
+        a1_klang = tr(en, "K 语言", "K Language"),
         a2_h = tr(
             en,
             "管理多机与日常任务 · KStudio & KWork",
@@ -1701,6 +1899,23 @@ pub fn docs_hub(en: bool) -> String {
             kui_doc_body.as_str(),
             tr(en, "打开 KUI 完整文档", "Open KUI documentation"),
         ),
+        (
+            "klang",
+            "klang",
+            klang_site(en).to_string(),
+            tr(en, "K 语言", "K Language"),
+            tr(
+                en,
+                ".k · Native · WASI · Cordis",
+                ".k · Native · WASI · Cordis",
+            ),
+            tr(
+                en,
+                "内存安全的系统编程语言（命令行 k，源文件 .k）。编译期检查引用生命周期并消除可证明安全的边界检查，可增长值放在地址稳定的数据栈上并在作用域退出时回收；支持 C 后端本机构建、WASI WebAssembly 模块、TinyCC 进程内运行、k lsp 语言服务器与 Cordis 微内核服务编排。",
+                "Memory-safe systems programming language (CLI k, .k source files). Checks reference lifetimes and eliminates proven bounds checks at compile time, storing growable values on address-stable data stacks reclaimed at scope exit. Ships native C, WASI WebAssembly, and TinyCC execution paths, k lsp, VS Code tooling, and the Cordis service microkernel.",
+            ),
+            tr(en, "打开 K 语言完整文档", "Open K language docs"),
+        ),
     ];
 
     let mut list = String::new();
@@ -1762,11 +1977,11 @@ pub fn docs_hub(en: bool) -> String {
         h1 = tr(en, "产品文档", "Documentation"),
         lead = tr(
             en,
-            "KStack、KStudio、KWork 与 KUI 四款核心产品的功能说明、交互入口及底层中间件介绍。",
-            "Overview and documentation entry points for KStack, KStudio, KWork, and KUI, along with runtime middleware notes."
+            "K 语言、KStack、KStudio、KWork 与 KUI 五款核心产品的功能说明、交互入口及底层中间件介绍。",
+            "Overview and documentation entry points for K, KStack, KStudio, KWork, and KUI, along with runtime middleware notes."
         ),
         core_head = tr(en, "核心产品", "Core products"),
-        strip = docs_product_strip(prefix),
+        strip = docs_product_strip(en, prefix),
         popover = product_popover(en),
     )
 }

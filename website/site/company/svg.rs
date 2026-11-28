@@ -68,6 +68,17 @@ pub fn solid_fallback(kind: &str) -> &'static str {
   <rect x="322" y="124" width="62" height="94" rx="10" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1.1"/>
 </svg>"##
         }
+        "klang" => {
+            r##"<svg class="kense-solid-fallback" viewBox="0 0 440 330" fill="none" aria-hidden="true">
+  <ellipse cx="224" cy="274" rx="152" ry="18" fill="currentColor" opacity="0.06"/>
+  <rect x="112" y="64" width="236" height="156" rx="16" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.2"/>
+  <rect x="128" y="80" width="98" height="124" rx="10" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1"/>
+  <rect x="238" y="80" width="94" height="36" rx="8" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1"/>
+  <rect x="238" y="124" width="94" height="36" rx="8" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1"/>
+  <rect x="238" y="168" width="94" height="36" rx="8" fill="var(--surface-muted)" stroke="var(--border)" stroke-width="1"/>
+  <rect x="58" y="136" width="84" height="84" rx="16" fill="#E11D48" opacity="0.9"/>
+</svg>"##
+        }
         _ => {
             r##"<svg class="kense-solid-fallback" viewBox="0 0 440 330" fill="none" aria-hidden="true">
   <ellipse cx="220" cy="276" rx="152" ry="18" fill="currentColor" opacity="0.06"/>
@@ -143,10 +154,11 @@ pub fn topology_connector(left: bool) -> &'static str {
 </svg>"#
     } else {
         r#"<svg class="kense-eco-connector" viewBox="0 0 64 480" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-  <path d="M2 240H18Q32 240 32 226V134Q32 120 46 120H62 M18 240Q32 240 32 254V346Q32 360 46 360H62"/>
-  <path class="kense-data-dot" d="M2 240H18Q32 240 32 226V134Q32 120 46 120H62" pathLength="100" style="--flow-delay:1.6s"/>
-  <path class="kense-data-dot" d="M2 240H18Q32 240 32 254V346Q32 360 46 360H62" pathLength="100" style="--flow-delay:4.8s"/>
-  <circle cx="2" cy="240" r="1.8"/><circle cx="62" cy="120" r="1.8"/><circle cx="62" cy="360" r="1.8"/>
+  <path d="M2 240H18Q32 240 32 226V94Q32 80 46 80H62 M2 240H62 M18 240Q32 240 32 254V386Q32 400 46 400H62"/>
+  <path class="kense-data-dot" d="M2 240H18Q32 240 32 226V94Q32 80 46 80H62" pathLength="100" style="--flow-delay:1.6s"/>
+  <path class="kense-data-dot" d="M2 240H62" pathLength="100" style="--flow-delay:4.8s"/>
+  <path class="kense-data-dot" d="M2 240H18Q32 240 32 254V386Q32 400 46 400H62" pathLength="100" style="--flow-delay:8.0s"/>
+  <circle cx="2" cy="240" r="1.8"/><circle cx="62" cy="80" r="1.8"/><circle cx="62" cy="240" r="1.8"/><circle cx="62" cy="400" r="1.8"/>
 </svg>"#
     }
 }

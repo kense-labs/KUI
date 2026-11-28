@@ -115,6 +115,7 @@ fn sync_hash_tab(window: &Window, root: &Element) {
         "#experience-gateway" => Some("gateway"),
         "#experience-sandbox" => Some("sandbox"),
         "#experience-interface" => Some("interface"),
+        "#experience-klang" => Some("klang"),
         _ => None,
     };
     if let Some(key) = tab {
@@ -382,7 +383,7 @@ pub(super) fn init(
             if !target.has_attribute("data-kense-tab") {
                 return;
             }
-            let order = ["gateway", "sandbox", "interface"];
+            let order = ["gateway", "sandbox", "interface", "klang"];
             let cur = target
                 .get_attribute("data-kense-tab")
                 .and_then(|v| order.iter().position(|&k| k == v))

@@ -208,6 +208,7 @@ impl KenseGuide {
             5 => "clay-release",
             6 => "clay-rust",
             7 => "studio",
+            8 => "klang",
             _ => return None,
         };
         let el = self

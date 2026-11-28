@@ -170,9 +170,9 @@ fn main() -> Result<()> {
             company::page(en, rev),
             "Kense",
             if en {
-                "Kense builds KStack, KStudio, KWork, and KUI: software for heterogeneous GPU scheduling, multi-machine development, desktop agents, and cross-platform GPUI interfaces."
+                "Kense builds K, KStack, KStudio, KWork, and KUI: a memory-safe systems language, heterogeneous GPU scheduling, multi-machine development, desktop agents, and cross-platform GPUI interfaces."
             } else {
-                "Kense 开发 KStack、KStudio、KWork 与 KUI：涵盖异构 GPU 调度、多机远程开发、桌面 Agent 工作台与跨端 GPUI 组件库。"
+                "Kense 开发 K 语言、KStack、KStudio、KWork 与 KUI：涵盖内存安全系统编程、异构 GPU 调度、多机远程开发、桌面 Agent 工作台与跨端 GPUI 组件库。"
             },
             true,
         )?;
@@ -185,9 +185,9 @@ fn main() -> Result<()> {
                 "文档 · Kense"
             },
             if en {
-                "Product documentation for KStack, KStudio, KWork, and KUI, plus KBox and KSandbox runtime middleware notes."
+                "Product documentation for K, KStack, KStudio, KWork, and KUI, plus KBox and KSandbox runtime middleware notes."
             } else {
-                "Kense 产品文档中心：KStack、KStudio、KWork、KUI 功能说明，以及 KBox 与 KSandbox 运行时中间件介绍。"
+                "Kense 产品文档中心：K 语言、KStack、KStudio、KWork、KUI 功能说明，以及 KBox 与 KSandbox 运行时中间件介绍。"
             },
             true,
         )?;

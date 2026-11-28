@@ -176,6 +176,11 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
     } else {
         format!("实时组件画廊（{count} 个）")
     };
+    let klang_site = if en {
+        "https://kense-labs.github.io/klang/"
+    } else {
+        "https://kense-labs.github.io/klang/README.zh-CN.html"
+    };
 
     format!(
         r##"<div class="kense-mega-panel" id="kense-mega-products" data-kense-mega="products" role="region" aria-label="{prod_region}" inert aria-hidden="true">
@@ -190,6 +195,10 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         <div class="kense-mega-sub">
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/docs/#kstack" data-mega-entry><span class="kense-mega-title">{s_kstack_doc}</span></a>
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience" data-mega-entry><span class="kense-mega-title">{s_kstack_demo}</span></a>
+        </div>
+        <a class="kense-mega-item kense-mega-item--has-sub" href="{prefix}/#products-klang" data-mega-entry>{l_klang}<div class="kense-mega-copy"><span class="kense-mega-title">{n_klang}</span><span class="kense-mega-desc">{d_klang}</span></div></a>
+        <div class="kense-mega-sub">
+          <a class="kense-mega-item kense-mega-item--sub" href="{klang_site}" data-mega-entry><span class="kense-mega-title">{s_klang_doc}</span></a>
         </div>
       </div>
       <p class="kense-mega-label">{c1_lbl}</p>
@@ -227,7 +236,7 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
         <a class="kense-mega-item" href="{prefix}/docs/" data-mega-entry>{l_docs}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_hub}</span><span class="kense-mega-desc">{dv_hub_d}</span></div></a>
-        <a class="kense-mega-item" href="{prefix}/kui/docs/installation/" data-mega-entry>{l_kui}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_install}</span><span class="kense-mega-desc">{dv_install_d}</span></div></a>
+        <a class="kense-mega-item" href="{klang_site}" data-mega-entry>{l_klang_dev}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_klang}</span><span class="kense-mega-desc">{dv_klang_d}</span></div></a>
         <a class="kense-mega-item" href="{prefix}/#architecture" data-mega-entry>{l_kstack}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_arch}</span><span class="kense-mega-desc">{dv_arch_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc1_lbl}</p>
@@ -235,8 +244,8 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
     <div class="kense-mega-col" data-mega-col>
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
-        <a class="kense-mega-item" href="{prefix}/kui/components/button/" data-mega-entry>{l_kui}<div class="kense-mega-copy"><span class="kense-mega-title">{comp_label}</span><span class="kense-mega-desc">{dv_comp_d}</span></div></a>
-        <a class="kense-mega-item" href="{prefix}/kui/ai/" data-mega-entry>{l_cli}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_ai}</span><span class="kense-mega-desc">{dv_ai_d}</span></div></a>
+        <a class="kense-mega-item" href="{prefix}/kui/docs/installation/" data-mega-entry>{l_kui}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_install}</span><span class="kense-mega-desc">{dv_install_d}</span></div></a>
+        <a class="kense-mega-item" href="{prefix}/kui/components/button/" data-mega-entry>{l_cli}<div class="kense-mega-copy"><span class="kense-mega-title">{comp_label}</span><span class="kense-mega-desc">{dv_comp_d}</span></div></a>
         <a class="kense-mega-item" href="/llms.txt" data-mega-entry>{l_docs}<div class="kense-mega-copy"><span class="kense-mega-title">llms.txt</span><span class="kense-mega-desc">{dv_llms_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc2_lbl}</p>
@@ -246,6 +255,7 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
       <div class="kense-mega-list">
         <a class="kense-mega-item" href="{prefix}/docs/#middleware" data-mega-entry>{l_kbox}<div class="kense-mega-copy"><span class="kense-mega-title">KBox</span><span class="kense-mega-desc">{dv_kbox_d}</span></div></a>
         <a class="kense-mega-item" href="{prefix}/docs/#middleware" data-mega-entry>{l_ksb}<div class="kense-mega-copy"><span class="kense-mega-title">KSandbox</span><span class="kense-mega-desc">{dv_ksb_d}</span></div></a>
+        <a class="kense-mega-item" href="https://github.com/kense-labs/klang" target="_blank" rel="noreferrer" data-mega-entry>{l_klang_repo}<div class="kense-mega-copy"><span class="kense-mega-title">klang GitHub</span><span class="kense-mega-desc">{dv_klang_repo_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc3_lbl}</p>
     </div>
@@ -254,8 +264,8 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         prod_region = tr(en, "Kense products", "Kense 核心产品"),
         prod_overview = tr(
             en,
-            "Browse KStack, KStudio, KWork, and KUI",
-            "查看 KStack、KStudio、KWork 与 KUI 四款核心产品"
+            "Browse KStack, KStudio, KWork, KUI, and K",
+            "查看 KStack、KStudio、KWork、KUI 与 K 语言五款核心产品"
         ),
         l_kstack = mega_logo("kstack"),
         d_kstack = tr(
@@ -265,7 +275,19 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         ),
         s_kstack_doc = tr(en, "Product overview & specs", "架构说明与支持范围"),
         s_kstack_demo = tr(en, "Try live placement panel", "在线体验选卡调度面板"),
-        c1_lbl = tr(en, "Compute & Models", "算力与模型"),
+        l_klang = mega_logo("klang"),
+        n_klang = tr(en, "K Language", "K 语言"),
+        d_klang = tr(
+            en,
+            "Memory-safe systems language with C, WASI & TinyCC targets",
+            "编译期生命周期检查与数据栈内存安全的系统编程语言"
+        ),
+        s_klang_doc = tr(
+            en,
+            "Language site, spec & benchmarks",
+            "语言官网、规范与性能基准"
+        ),
+        c1_lbl = tr(en, "Compute & Systems", "算力与系统"),
         l_kstudio = mega_logo("kstudio"),
         d_kstudio = tr(
             en,
@@ -289,8 +311,15 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         dv_hub = tr(en, "Product Documentation", "产品文档总览"),
         dv_hub_d = tr(
             en,
-            "Guides for KStack, KStudio, KWork, and KUI",
-            "KStack、KStudio、KWork 与 KUI 功能说明"
+            "Guides for K, KStack, KStudio, KWork, and KUI",
+            "K 语言、KStack、KStudio、KWork 与 KUI 功能说明"
+        ),
+        l_klang_dev = mega_logo("klang"),
+        dv_klang = tr(en, "K Language Docs", "K 语言教程与参考"),
+        dv_klang_d = tr(
+            en,
+            "Tutorial, language spec, Cordis microkernel & WASI guides",
+            "语法教程、生命周期规范、Cordis 微内核与 WASI 构建"
         ),
         dv_install = tr(en, "KUI Setup & CLI", "KUI 安装与 CLI"),
         dv_install_d = tr(
@@ -298,11 +327,11 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
             "Add the crate or copy component source with kui add",
             "按 Cargo 依赖引入或用 kui add 拷贝组件源码"
         ),
-        dv_arch = tr(en, "How Products Fit Together", "四款产品怎么配合"),
+        dv_arch = tr(en, "How Products Fit Together", "五款产品怎么配合"),
         dv_arch_d = tr(
             en,
-            "How desktop tools connect to KStack and runtimes",
-            "桌面端、模型算力池与底层运行环境的配合方式"
+            "How desktop tools, KStack, K, and runtimes connect",
+            "桌面端、模型算力池、K 语言与底层运行环境的配合方式"
         ),
         dc1_lbl = tr(en, "Documentation", "文档与架构"),
         l_cli = mega_logo("cli"),
@@ -310,12 +339,6 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
             en,
             "Live GPUI WebAssembly previews and Rust source",
             "直接在浏览器里点按预览并查看 Rust 源码"
-        ),
-        dv_ai = tr(en, "Coding-Agent Guide", "编程 Agent 接入说明"),
-        dv_ai_d = tr(
-            en,
-            "Ready-to-paste component specs and CLI workflows",
-            "可直接发给编程 Agent 阅读的组件规格与接入步骤"
         ),
         dv_llms_d = tr(
             en,
@@ -335,7 +358,13 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
             "OS-level process sandbox for tool subprocesses",
             "限制工具子进程文件与网络边界的轻量沙箱中间件"
         ),
-        dc3_lbl = tr(en, "Middleware", "底层中间件"),
+        l_klang_repo = mega_logo("klang"),
+        dv_klang_repo_d = tr(
+            en,
+            "k compiler, k lsp, Cordis & benchmark suite source",
+            "k 编译器、k lsp 语言服务器与基准测试源码"
+        ),
+        dc3_lbl = tr(en, "Runtime & Source", "中间件与源码"),
     )
 }
 
@@ -352,8 +381,8 @@ fn header(en: bool, company: bool, landing: bool) -> String {
             r#"class="company-nav-trigger" data-kense-menu-toggle="products" aria-expanded="false" aria-controls="kense-mega-products" data-kense-hint="{}""#,
             tr(
                 en,
-                "Browse KStack, KStudio, KWork, and KUI",
-                "查看 KStack、KStudio、KWork 与 KUI"
+                "Browse KStack, KStudio, KWork, KUI, and K",
+                "查看 KStack、KStudio、KWork、KUI 与 K 语言"
             )
         ),
         &format!(
@@ -367,8 +396,8 @@ fn header(en: bool, company: bool, landing: bool) -> String {
             r#"class="company-nav-trigger" data-kense-menu-toggle="developers" aria-expanded="false" aria-controls="kense-mega-developers" data-kense-hint="{}""#,
             tr(
                 en,
-                "Product docs, KUI components, and runtime middleware",
-                "查看文档中心、KUI 组件索引与底层中间件说明"
+                "Product docs, K language, KUI components, and runtime middleware",
+                "查看文档中心、K 语言、KUI 组件索引与底层中间件说明"
             )
         ),
         &format!(
@@ -384,8 +413,8 @@ fn header(en: bool, company: bool, landing: bool) -> String {
     );
     let arch_hint = tr(
         en,
-        "See how KStack, KStudio, KWork, and KUI work together",
-        "查看四款核心产品如何分工配合",
+        "See how K, KStack, KStudio, KWork, and KUI work together",
+        "查看五款核心产品如何分工配合",
     );
     let gh_hint = tr(
         en,
@@ -447,18 +476,25 @@ fn footer(en: bool, company: bool) -> String {
         } else {
             format!("{count} 个组件画廊")
         };
+        let klang_site = if en {
+            "https://kense-labs.github.io/klang/"
+        } else {
+            "https://kense-labs.github.io/klang/README.zh-CN.html"
+        };
         return format!(
-            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/#products-kstack">KStack</a></li><li><a href="{prefix}/#products-kstudio">KStudio</a></li><li><a href="{prefix}/#products-kwork">KWork</a></li><li><a href="{prefix}/kui/">KUI</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/docs/installation/">{install}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{prefix}/docs/#middleware">KBox &amp; KSandbox</a></li><li><a href="https://kense-labs.github.io/krun/">{krun}</a></li></ul></div></div><div class="footer-company-legal"><span>© Kense</span><a href="{prefix}/docs/">{docs}</a></div></div></footer>"#,
+            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/#products-kstack">KStack</a></li><li><a href="{prefix}/#products-kstudio">KStudio</a></li><li><a href="{prefix}/#products-kwork">KWork</a></li><li><a href="{prefix}/kui/">KUI</a></li><li><a href="{prefix}/#products-klang">{klang_name}</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/docs/installation/">{install}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{klang_site}">{klang_docs}</a></li><li><a href="{prefix}/docs/#middleware">KBox &amp; KSandbox</a></li><li><a href="https://kense-labs.github.io/krun/">{krun}</a></li></ul></div></div><div class="footer-company-legal"><span>© Kense</span><a href="{prefix}/docs/">{docs}</a></div></div></footer>"#,
             mark = mark(),
             tagline = tr(
                 en,
-                "Software for GPU scheduling, multi-machine development, desktop agents, and cross-platform UI.",
-                "做算力调度、多机连接、桌面 Agent 与跨端 UI 软件。"
+                "Systems programming language, GPU scheduling, multi-machine development, desktop agents, and cross-platform UI.",
+                "做系统编程语言、算力调度、多机连接、桌面 Agent 与跨端 UI 软件。"
             ),
             c1 = tr(en, "Core Products", "核心产品"),
             c2 = tr(en, "KUI & Tooling", "界面与工具"),
             c3 = tr(en, "Docs & Middleware", "文档与中间件"),
             docs = tr(en, "Documentation", "产品文档中心"),
+            klang_name = tr(en, "K Language", "K 语言"),
+            klang_docs = tr(en, "K Language Docs", "K 语言技术文档"),
             install = tr(en, "KUI Installation", "KUI 安装指南"),
             components = components,
             ai = tr(en, "Coding-Agent Guide", "Agent 接入说明"),

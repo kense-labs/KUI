@@ -598,6 +598,17 @@ html[lang^="en"] .kense-home {
   --domain-rim: #7c3aed;
 }
 
+:is(
+    [data-domain="klang"],
+    [data-belt-item="klang"],
+    [data-hint-domain="klang"],
+    [data-pop-domain="klang"]
+  ) {
+  --domain-bg: #fdeef2;
+  --domain-ink: #6b1028;
+  --domain-rim: #e11d48;
+}
+
 :is([data-pop-domain="krun"]) {
   --domain-bg: #e6f4f8;
   --domain-ink: #0a4558;
@@ -687,6 +698,18 @@ html[data-theme="dark"]
   --domain-bg: #251b3d;
   --domain-ink: #d0bcff;
   --domain-rim: #a78bfa;
+}
+
+html[data-theme="dark"]
+  :is(
+    [data-domain="klang"],
+    [data-belt-item="klang"],
+    [data-hint-domain="klang"],
+    [data-pop-domain="klang"]
+  ) {
+  --domain-bg: #2c151f;
+  --domain-ink: #fda4af;
+  --domain-rim: #fb7185;
 }
 
 html[data-theme="dark"] :is([data-pop-domain="krun"]) {
@@ -794,7 +817,7 @@ html[data-theme="dark"] .kense-belt-logo {
   display: block;
   position: absolute;
   inset: 0 auto 0 50%;
-  width: 12.5em;
+  width: 13.5em;
   transform: translateX(-50%);
   pointer-events: none;
   mask-image: linear-gradient(
@@ -1812,7 +1835,7 @@ html[data-theme="dark"] .kense-exp-stage {
 }
 
 .kense-eco-supply {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
 }
 
 .kense-eco-card {
