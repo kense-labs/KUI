@@ -181,6 +181,11 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
     } else {
         "https://kense-labs.github.io/klang/README.zh-CN.html"
     };
+    let klang_tutorial = if en {
+        "https://kense-labs.github.io/klang/docs/tutorial.html"
+    } else {
+        "https://kense-labs.github.io/klang/docs/zh/tutorial.html"
+    };
 
     format!(
         r##"<div class="kense-mega-panel" id="kense-mega-products" data-kense-mega="products" role="region" aria-label="{prod_region}" inert aria-hidden="true">
@@ -196,9 +201,10 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/docs/#kstack" data-mega-entry><span class="kense-mega-title">{s_kstack_doc}</span></a>
           <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience" data-mega-entry><span class="kense-mega-title">{s_kstack_demo}</span></a>
         </div>
-        <a class="kense-mega-item kense-mega-item--has-sub" href="{prefix}/#products-klang" data-mega-entry>{l_klang}<div class="kense-mega-copy"><span class="kense-mega-title">{n_klang}</span><span class="kense-mega-desc">{d_klang}</span></div></a>
+        <a class="kense-mega-item kense-mega-item--has-sub" href="{klang_site}" data-mega-entry>{l_klang}<div class="kense-mega-copy"><span class="kense-mega-title">{n_klang}</span><span class="kense-mega-desc">{d_klang}</span></div></a>
         <div class="kense-mega-sub">
-          <a class="kense-mega-item kense-mega-item--sub" href="{klang_site}" data-mega-entry><span class="kense-mega-title">{s_klang_doc}</span></a>
+          <a class="kense-mega-item kense-mega-item--sub" href="{klang_tutorial}" data-mega-entry><span class="kense-mega-title">{s_klang_doc}</span></a>
+          <a class="kense-mega-item kense-mega-item--sub" href="{prefix}/#experience-klang" data-mega-entry><span class="kense-mega-title">{s_klang_demo}</span></a>
         </div>
       </div>
       <p class="kense-mega-label">{c1_lbl}</p>
@@ -236,7 +242,7 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
       <div class="kense-mega-highlight" aria-hidden="true"></div>
       <div class="kense-mega-list">
         <a class="kense-mega-item" href="{prefix}/docs/" data-mega-entry>{l_docs}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_hub}</span><span class="kense-mega-desc">{dv_hub_d}</span></div></a>
-        <a class="kense-mega-item" href="{klang_site}" data-mega-entry>{l_klang_dev}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_klang}</span><span class="kense-mega-desc">{dv_klang_d}</span></div></a>
+        <a class="kense-mega-item" href="{klang_tutorial}" data-mega-entry>{l_klang_dev}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_klang}</span><span class="kense-mega-desc">{dv_klang_d}</span></div></a>
         <a class="kense-mega-item" href="{prefix}/#architecture" data-mega-entry>{l_kstack}<div class="kense-mega-copy"><span class="kense-mega-title">{dv_arch}</span><span class="kense-mega-desc">{dv_arch_d}</span></div></a>
       </div>
       <p class="kense-mega-label">{dc1_lbl}</p>
@@ -284,9 +290,10 @@ fn company_mega_menus(en: bool, prefix: &str) -> String {
         ),
         s_klang_doc = tr(
             en,
-            "Language site, spec & benchmarks",
-            "语言官网、规范与性能基准"
+            "Tutorial, spec & benchmarks",
+            "语法教程、规范与性能基准"
         ),
+        s_klang_demo = tr(en, "Try live compiler panel", "在线体验编译验证面板"),
         c1_lbl = tr(en, "Compute & Systems", "算力与系统"),
         l_kstudio = mega_logo("kstudio"),
         d_kstudio = tr(
@@ -481,8 +488,13 @@ fn footer(en: bool, company: bool) -> String {
         } else {
             "https://kense-labs.github.io/klang/README.zh-CN.html"
         };
+        let klang_tutorial = if en {
+            "https://kense-labs.github.io/klang/docs/tutorial.html"
+        } else {
+            "https://kense-labs.github.io/klang/docs/zh/tutorial.html"
+        };
         return format!(
-            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/#products-kstack">KStack</a></li><li><a href="{prefix}/#products-kstudio">KStudio</a></li><li><a href="{prefix}/#products-kwork">KWork</a></li><li><a href="{prefix}/kui/">KUI</a></li><li><a href="{prefix}/#products-klang">{klang_name}</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/docs/installation/">{install}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{klang_site}">{klang_docs}</a></li><li><a href="{prefix}/docs/#middleware">KBox &amp; KSandbox</a></li><li><a href="https://kense-labs.github.io/krun/">{krun}</a></li></ul></div></div><div class="footer-company-legal"><span>© Kense</span><a href="{prefix}/docs/">{docs}</a></div></div></footer>"#,
+            r#"<footer class="footer-company-shell"><div class="footer-closing-card"><div class="footer-company-grid"><div class="footer-company-brand"><a class="footer-company-lockup" href="{prefix}/">{mark}<span>Kense</span></a><p class="footer-company-tagline">{tagline}</p></div><div class="footer-company-col"><h2>{c1}</h2><ul><li><a href="{prefix}/#products-kstack">KStack</a></li><li><a href="{prefix}/#products-kstudio">KStudio</a></li><li><a href="{prefix}/#products-kwork">KWork</a></li><li><a href="{prefix}/kui/">KUI</a></li><li><a href="{klang_site}">{klang_name}</a></li></ul></div><div class="footer-company-col"><h2>{c2}</h2><ul><li><a href="{prefix}/kui/components/button/">{components}</a></li><li><a href="{prefix}/kui/docs/installation/">{install}</a></li><li><a href="{prefix}/kui/ai/">{ai}</a></li><li><a href="/llms.txt">llms.txt</a></li></ul></div><div class="footer-company-col"><h2>{c3}</h2><ul><li><a href="{prefix}/docs/">{docs}</a></li><li><a href="{klang_tutorial}">{klang_docs}</a></li><li><a href="{prefix}/docs/#middleware">KBox &amp; KSandbox</a></li><li><a href="https://kense-labs.github.io/krun/">{krun}</a></li></ul></div></div><div class="footer-company-legal"><span>© Kense</span><a href="{prefix}/docs/">{docs}</a></div></div></footer>"#,
             mark = mark(),
             tagline = tr(
                 en,

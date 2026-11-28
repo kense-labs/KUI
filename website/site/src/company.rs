@@ -456,7 +456,7 @@ fn hero_solution_belt(en: bool, prefix: &str) -> String {
         ),
         (
             "klang",
-            format!("{prefix}/#products-klang"),
+            klang_site(en).to_string(),
             false,
             tr(en, "K 系统编程语言", "K Language"),
             tr(en, "K 语言", "K Language"),
@@ -1244,8 +1244,8 @@ pub fn page(en: bool, rev: &str) -> String {
         ),
         ui_b2 = tr(
             en,
-            "内置本地 Whisper 离线语音听写与多模型切换，敏感命令逐次确认",
-            "Built-in local Whisper dictation, inline model picker, and per-command approval"
+            "内置本地 Whisper 离线语音听写、Kantor 表格协同与多智能体运行时切换",
+            "Built-in local Whisper dictation, Kantor spreadsheet sync, and runtime switcher"
         ),
         ui_b3 = tr(
             en,

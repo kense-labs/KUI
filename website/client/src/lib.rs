@@ -161,12 +161,24 @@ fn arm_kui_intro() -> Result<(), JsValue> {
         let Ok(url) = web_sys::Url::new_with_base(&anchor.href(), &base) else {
             return;
         };
-        if win.location().origin().ok().as_deref() != Some(url.origin().as_str())
-            || !url.hash().is_empty()
-        {
+        if !url.hash().is_empty() {
             return;
         }
         let dest = url.pathname();
+        if dest == "/klang" || dest.starts_with("/klang/") {
+            if let Ok(Some(storage)) = win.session_storage() {
+                let _ = storage.set_item("klang:product-intro:armed", "1");
+            }
+            if let Ok(Some(local)) = win.local_storage()
+                && let Ok(Some(theme)) = local.get_item("theme")
+            {
+                let _ = local.set_item("k-docs-theme", &theme);
+            }
+            return;
+        }
+        if win.location().origin().ok().as_deref() != Some(url.origin().as_str()) {
+            return;
+        }
         if !matches!(dest.as_str(), "/kui" | "/kui/" | "/en/kui" | "/en/kui/") {
             return;
         }
